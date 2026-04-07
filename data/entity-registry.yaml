@@ -1,0 +1,451 @@
+# IDS Entity Registry — Segunda-feira Framework
+# Ultima atualizacao: 2026-03-29
+# Principio: REUSE > ADAPT > CREATE
+# Referencia: ~/.claude/rules/ids-principles.md
+
+version: "1.0"
+
+categories:
+  patterns:
+    description: "Padroes de codigo e arquitetura reutilizaveis"
+    entities:
+      - id: PAT-001
+        name: "SYNC > CACHE > REAL-TIME"
+        type: pattern
+        domain: api-integration
+        description: "Padrao para integracao com APIs externas em dashboards — dados sincronizados para DB local, frontend consulta apenas DB, zero chamadas diretas"
+        source: "~/.claude/rules/external-api-patterns.md"
+        adaptability: 0.95
+        usedBy: ["alr-dashboard", "my-growth", "utm-manager"]
+        status: active
+        tags: ["api", "dashboard", "rate-limit", "sync"]
+
+      - id: PAT-002
+        name: "Story Development Cycle (SDC)"
+        type: workflow-pattern
+        domain: development
+        description: "Ciclo completo 4 fases: Create (@sm) -> Validate (@po) -> Implement (@dev) -> QA Gate (@qa)"
+        source: "~/.claude/rules/workflow-execution.md"
+        adaptability: 0.9
+        usedBy: ["saude360", "alr-dashboard", "delivery-app", "domina-ia"]
+        status: active
+        tags: ["workflow", "development", "story", "sdc"]
+
+      - id: PAT-003
+        name: "CodeRabbit Self-Healing"
+        type: quality-pattern
+        domain: code-review
+        description: "Loop automatico de correcao — CRITICAL/HIGH auto-fix, max 2 iteracoes em dev, max 3 em QA"
+        source: "~/.claude/rules/coderabbit-integration.md"
+        adaptability: 0.85
+        usedBy: ["all-dev-stories"]
+        status: active
+        tags: ["quality", "code-review", "automation", "self-healing"]
+
+      - id: PAT-004
+        name: "QA Loop Iterativo"
+        type: workflow-pattern
+        domain: quality
+        description: "Ciclo review-fix automatizado: @qa review -> verdict -> @dev fixes -> re-review (max 5 iteracoes)"
+        source: ".aios-core/development/workflows/qa-loop.yaml"
+        adaptability: 0.9
+        usedBy: ["all-stories"]
+        status: active
+        tags: ["qa", "workflow", "iterative", "review"]
+
+      - id: PAT-005
+        name: "Spec Pipeline"
+        type: workflow-pattern
+        domain: requirements
+        description: "Pipeline de 6 fases para transformar requisitos informais em spec executavel — Gather, Assess, Research, Write, Critique, Plan"
+        source: ".aios-core/development/workflows/spec-pipeline.yaml"
+        adaptability: 0.85
+        usedBy: ["complex-features"]
+        status: active
+        tags: ["spec", "requirements", "pipeline", "complexity"]
+
+      - id: PAT-006
+        name: "Brownfield Discovery"
+        type: assessment-pattern
+        domain: legacy
+        description: "Assessment 10 fases para codebases existentes — coleta dados, draft, validacao, finalizacao"
+        source: ".aios-core/development/workflows/brownfield-discovery.yaml"
+        adaptability: 0.8
+        usedBy: ["alr-dashboard", "delivery-app"]
+        status: active
+        tags: ["brownfield", "legacy", "technical-debt", "assessment"]
+
+      - id: PAT-007
+        name: "PM2 + Nginx + SSL Deploy"
+        type: infra-pattern
+        domain: devops
+        description: "Pattern padrao de deploy VPS — app Node.js com PM2, reverse proxy Nginx, certificado SSL Let's Encrypt"
+        source: "deploy scripts VPS"
+        adaptability: 0.9
+        usedBy: ["my-growth", "alr-dashboard", "domina-ia", "whatsapp-bot", "segunda-feira-daemon"]
+        status: active
+        tags: ["deploy", "pm2", "nginx", "ssl", "vps"]
+
+      - id: PAT-008
+        name: "EROS 5 Portoes de Qualidade"
+        type: quality-pattern
+        domain: framework
+        description: "Padrao de qualidade integrado — Compreensao, Planejamento, Execucao, Revisao, Liberacao"
+        source: "~/.claude/rules/eros-quality.md"
+        adaptability: 0.85
+        usedBy: ["all-projects"]
+        status: active
+        tags: ["quality", "eros", "gates", "process"]
+
+  templates:
+    description: "Templates reutilizaveis para documentos e codigo"
+    entities:
+      - id: TPL-001
+        name: "Story Template"
+        type: document-template
+        domain: development
+        description: "Template padrao para stories com AC (Given/When/Then), scope IN/OUT, file list, change log"
+        source: ".aios-core/development/templates/squad-template/"
+        adaptability: 0.95
+        usedBy: ["all-stories"]
+        status: active
+        tags: ["story", "document", "template", "development"]
+
+      - id: TPL-002
+        name: "Dark/Green Ad Creative 9:16"
+        type: visual-template
+        domain: marketing
+        description: "Template dark com verde neon para criativos Meta Ads 1080x1920 — angulo campeo 'R$3K a R$30K'"
+        source: "content-studio/templates/"
+        adaptability: 0.8
+        usedBy: ["desafio-mi", "desafio-ai-first"]
+        status: active
+        tags: ["creative", "meta-ads", "dark-theme", "9:16"]
+
+      - id: TPL-003
+        name: "News Template Dark 1080x1350"
+        type: visual-template
+        domain: content
+        description: "Template dark 1080x1350 para posts de noticias/breaking news (noticia-mythos aprovado)"
+        source: "content-studio/templates/"
+        adaptability: 0.85
+        usedBy: ["instagram-posts"]
+        status: active
+        tags: ["news", "instagram", "dark-theme", "feed"]
+
+      - id: TPL-004
+        name: "Tech Spec Template"
+        type: document-template
+        domain: architecture
+        description: "Template YAML para especificacoes tecnicas com sections padronizadas"
+        source: ".aios-core/development/templates/tech-spec-tmpl.yaml"
+        adaptability: 0.9
+        usedBy: ["spec-pipeline", "complex-features"]
+        status: active
+        tags: ["spec", "technical", "yaml", "architecture"]
+
+      - id: TPL-005
+        name: "Research Prompt Template"
+        type: document-template
+        domain: research
+        description: "Template para prompts de deep research com estrutura padronizada"
+        source: ".aios-core/development/templates/research-prompt-tmpl.md"
+        adaptability: 0.9
+        usedBy: ["domain-research", "market-research"]
+        status: active
+        tags: ["research", "prompt", "template"]
+
+      - id: TPL-006
+        name: "Squad Template"
+        type: agent-template
+        domain: framework
+        description: "Template para criacao de squads com roles, workflows e integracao"
+        source: ".aios-core/development/templates/squad/"
+        adaptability: 0.85
+        usedBy: ["traffic-masters", "hormozi-squad", "copy-squad", "ai-engineering"]
+        status: active
+        tags: ["squad", "agent", "template", "framework"]
+
+  components:
+    description: "Componentes de codigo reutilizaveis"
+    entities:
+      - id: CMP-001
+        name: "WhatsApp Bot Core (Baileys + Claude)"
+        type: service-component
+        domain: automation
+        description: "Bot WhatsApp com Baileys lib + Claude AI, sistema de tags, regras de resposta, porta 3003"
+        source: "/opt/my-growth/ (VPS)"
+        adaptability: 0.7
+        usedBy: ["domina-ia", "whatsapp-bot"]
+        status: active
+        tags: ["whatsapp", "bot", "baileys", "claude-ai"]
+
+      - id: CMP-002
+        name: "Meta Ads API Integration"
+        type: api-component
+        domain: marketing
+        description: "Integracao Meta Marketing API com rate limiting, sync DB, CBO, Advantage+, interest targeting"
+        source: "utm-manager/, my-growth/"
+        adaptability: 0.8
+        usedBy: ["utm-manager", "my-growth", "content-studio"]
+        status: active
+        tags: ["meta-ads", "api", "marketing", "campaigns"]
+
+      - id: CMP-003
+        name: "Supabase Auth + RLS Pattern"
+        type: data-component
+        domain: backend
+        description: "Pattern de autenticacao Supabase com Row Level Security, Next.js middleware"
+        source: "saude360/"
+        adaptability: 0.85
+        usedBy: ["saude360"]
+        status: active
+        tags: ["supabase", "auth", "rls", "next.js"]
+
+      - id: CMP-004
+        name: "Telegram Scraper Pipeline"
+        type: data-component
+        domain: data-extraction
+        description: "Pipeline de scraping Telegram — 28 grupos, 83K+ msgs, 1.5K+ arquivos, output estruturado"
+        source: "~/telegram-scraper/"
+        adaptability: 0.75
+        usedBy: ["inema-upgrade", "knowledge-repos"]
+        status: active
+        tags: ["telegram", "scraper", "data", "pipeline"]
+
+      - id: CMP-005
+        name: "Cron VPS Automations"
+        type: infra-component
+        domain: automation
+        description: "Sistema de crons VPS — noticias IA diarias 08h, agenda semanal sabado 09h, aprovacao Telegram->WhatsApp"
+        source: "VPS YOUR_VPS_IP"
+        adaptability: 0.8
+        usedBy: ["automacoes-telegram-vps", "daily-briefing"]
+        status: active
+        tags: ["cron", "vps", "automation", "scheduled"]
+
+      - id: CMP-006
+        name: "Segunda-feira Daemon Multi-Canal"
+        type: service-component
+        domain: framework
+        description: "Daemon 24/7 com 35+ agentes, roteamento 3 camadas, WhatsApp+Telegram+Discord, porta 3005"
+        source: "segunda-feira-daemon"
+        adaptability: 0.6
+        usedBy: ["domina-ia"]
+        status: active
+        tags: ["daemon", "multi-channel", "agents", "routing"]
+
+  skills:
+    description: "Skills reutilizaveis do framework Segunda-feira"
+    entities:
+      - id: SKL-001
+        name: "Campaign Builder"
+        type: skill-pattern
+        domain: marketing
+        description: "Builder de campanhas Meta Ads com validacao pre-envio e checklist 12 itens"
+        source: "~/.claude/skills/campaign-builder.md"
+        adaptability: 0.85
+        usedBy: ["desafio-mi", "desafio-ai-first"]
+        status: active
+        tags: ["campaign", "meta-ads", "checklist", "builder"]
+
+      - id: SKL-002
+        name: "Content Pipeline"
+        type: skill-pattern
+        domain: content
+        description: "Pipeline automatizado de 21 posts semanais Instagram com aprovacao em batch"
+        source: "~/.claude/skills/content-pipeline.md"
+        adaptability: 0.8
+        usedBy: ["instagram-rudneimazepa"]
+        status: active
+        tags: ["content", "instagram", "pipeline", "batch"]
+
+      - id: SKL-003
+        name: "Deploy Orchestra"
+        type: skill-pattern
+        domain: devops
+        description: "Orquestrador de deploy unificado para todos os projetos VPS"
+        source: "~/.claude/skills/deploy-orchestra.md"
+        adaptability: 0.9
+        usedBy: ["my-growth", "alr-dashboard", "domina-ia", "whatsapp-bot"]
+        status: active
+        tags: ["deploy", "vps", "orchestration"]
+
+      - id: SKL-004
+        name: "VPS Setup"
+        type: skill-pattern
+        domain: infra
+        description: "Setup VPS Docker completo — Node.js, PM2, Nginx, SSL, firewall"
+        source: "~/.claude/skills/vps-setup.md"
+        adaptability: 0.9
+        usedBy: ["all-vps-projects"]
+        status: active
+        tags: ["vps", "setup", "docker", "infrastructure"]
+
+      - id: SKL-005
+        name: "Paid Ads Management"
+        type: skill-pattern
+        domain: marketing
+        description: "Gestao Meta Ads — criacao, otimizacao, escala, analise Sobral/Hormozi"
+        source: "~/.claude/skills/paid-ads.md"
+        adaptability: 0.85
+        usedBy: ["desafio-mi", "desafio-ai-first", "heo"]
+        status: active
+        tags: ["ads", "meta", "management", "optimization"]
+
+      - id: SKL-006
+        name: "Self-Optimize"
+        type: skill-pattern
+        domain: framework
+        description: "Auto-analise e melhoria continua do framework — detecta padroes, propoe skills, evolui autonomia"
+        source: "~/.claude/skills/self-optimize.md"
+        adaptability: 0.7
+        usedBy: ["segunda-feira"]
+        status: active
+        tags: ["self-improvement", "framework", "meta", "evolution"]
+
+      - id: SKL-007
+        name: "Video to PDF"
+        type: skill-pattern
+        domain: content
+        description: "Transcricao de videos + geracao de PDFs educacionais com Whisper"
+        source: "~/.claude/skills/video-to-pdf.md"
+        adaptability: 0.85
+        usedBy: ["mentoria-autopilot", "content-creation"]
+        status: active
+        tags: ["video", "pdf", "transcription", "whisper"]
+
+      - id: SKL-008
+        name: "n8n Workflows Library"
+        type: skill-pattern
+        domain: automation
+        description: "Biblioteca de 597 workflows n8n prontos para automacao"
+        source: "~/.claude/skills/n8n-workflows.md"
+        adaptability: 0.9
+        usedBy: ["automations", "integrations"]
+        status: active
+        tags: ["n8n", "workflows", "automation", "library"]
+
+  rules:
+    description: "Regras e politicas reutilizaveis"
+    entities:
+      - id: RUL-001
+        name: "Agent Authority Matrix"
+        type: governance-rule
+        domain: framework
+        description: "Matriz de delegacao — quem pode fazer o que. @devops exclusivo para git push/PR, @po para validacao, @dev para implementacao"
+        source: "~/.claude/rules/agent-authority.md"
+        adaptability: 0.7
+        usedBy: ["all-projects"]
+        status: active
+        tags: ["governance", "authority", "delegation", "agents"]
+
+      - id: RUL-002
+        name: "EROS Quality Standard"
+        type: quality-rule
+        domain: framework
+        description: "5 portoes de qualidade com taxonomia de falhas (C1-C3, E1-E5, P1-P4, Q1-Q4), auto-checagem obrigatoria"
+        source: "~/.claude/rules/eros-quality.md"
+        adaptability: 0.85
+        usedBy: ["all-projects"]
+        status: active
+        tags: ["quality", "eros", "taxonomy", "gates"]
+
+      - id: RUL-003
+        name: "Story Lifecycle Rules"
+        type: process-rule
+        domain: development
+        description: "Progressao Draft -> Ready -> InProgress -> InReview -> Done, 10-point validation, 7 QA checks"
+        source: "~/.claude/rules/story-lifecycle.md"
+        adaptability: 0.9
+        usedBy: ["all-stories"]
+        status: active
+        tags: ["story", "lifecycle", "status", "validation"]
+
+      - id: RUL-004
+        name: "IDS Principles (REUSE > ADAPT > CREATE)"
+        type: governance-rule
+        domain: framework
+        description: "Hierarquia de decisao para reutilizacao — 6 verification gates (G1-G6), override policy, graceful degradation"
+        source: "~/.claude/rules/ids-principles.md"
+        adaptability: 0.75
+        usedBy: ["all-projects"]
+        status: active
+        tags: ["ids", "reuse", "adapt", "create", "governance"]
+
+      - id: RUL-005
+        name: "MCP Usage Governance"
+        type: governance-rule
+        domain: infrastructure
+        description: "Regras de uso MCP — @devops exclusivo para add/remove, prioridade tools nativos, Docker gateway rules"
+        source: "~/.claude/rules/mcp-usage.md"
+        adaptability: 0.8
+        usedBy: ["all-projects"]
+        status: active
+        tags: ["mcp", "governance", "docker", "tools"]
+
+      - id: RUL-006
+        name: "External API Dashboard Ban"
+        type: technical-rule
+        domain: api-integration
+        description: "Dashboards NUNCA fazem chamadas real-time a APIs externas — obrigatorio sync para DB local primeiro"
+        source: "~/.claude/rules/external-api-patterns.md"
+        adaptability: 0.95
+        usedBy: ["alr-dashboard", "my-growth"]
+        status: active
+        tags: ["api", "dashboard", "ban", "sync"]
+
+  schemas:
+    description: "Schemas e validadores reutilizaveis"
+    entities:
+      - id: SCH-001
+        name: "Agent V3 Schema"
+        type: json-schema
+        domain: framework
+        description: "Schema JSON para definicao de agentes v3 — persona, capabilities, constraints"
+        source: ".aios-core/schemas/agent-v3-schema.json"
+        adaptability: 0.85
+        usedBy: ["all-agents"]
+        status: active
+        tags: ["schema", "agent", "json", "validation"]
+
+      - id: SCH-002
+        name: "Squad Schema"
+        type: json-schema
+        domain: framework
+        description: "Schema para design e validacao de squads — roles, workflows, integracao"
+        source: ".aios-core/schemas/squad-schema.json"
+        adaptability: 0.85
+        usedBy: ["all-squads"]
+        status: active
+        tags: ["schema", "squad", "json", "validation"]
+
+      - id: SCH-003
+        name: "Task V3 Schema"
+        type: json-schema
+        domain: framework
+        description: "Schema para definicao de tasks v3 — inputs, outputs, pre/post-conditions, execution modes"
+        source: ".aios-core/schemas/task-v3-schema.json"
+        adaptability: 0.9
+        usedBy: ["all-tasks"]
+        status: active
+        tags: ["schema", "task", "json", "validation"]
+
+# -------------------------------------------------------------------
+# Lookup instructions for agents:
+#
+# Antes de criar QUALQUER novo pattern, template, component, skill ou rule:
+#
+# 1. Busque neste registry por domain e type
+# 2. Se match com adaptability >= 0.9 -> REUSE diretamente
+# 3. Se match com adaptability >= 0.6 -> ADAPT (max 30% de mudancas)
+# 4. Somente CREATE se nao houver match adequado
+# 5. Registre novas entidades em ate 24h apos criacao
+#
+# Para CREATE, documente obrigatoriamente:
+#   - evaluated_patterns: entidades consideradas
+#   - rejection_reasons: por que cada uma foi rejeitada
+#   - new_capability: que capacidade unica esta entidade fornece
+#
+# Referencia completa: ~/.claude/rules/ids-principles.md
+# -------------------------------------------------------------------

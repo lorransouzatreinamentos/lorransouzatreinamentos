@@ -1,0 +1,950 @@
+# Smart Router — Segunda-feira Framework
+# Roteamento automatico de tarefas para agentes
+# Ultima atualizacao: 2026-03-29
+#
+# O Smart Router analisa a intencao do usuario (keywords + contexto)
+# e roteia para o agente mais adequado, com fallback chain.
+# Se confianca < threshold, pergunta ao usuario.
+
+version: "1.0"
+
+default_agent: "@aios-master"
+confidence_threshold: 0.6
+
+# ============================================================================
+# ROUTING RULES
+# ============================================================================
+# Cada regra define:
+#   intent        - identificador unico da intencao
+#   keywords      - palavras-chave que ativam (PT-BR + EN)
+#   agent         - agente primario
+#   fallback      - cadeia de fallback (tentados em ordem)
+#   priority      - 1 (baixa) a 10 (maxima) — resolve conflitos entre regras
+#   category      - dominio para agrupamento logico
+#   description   - descricao curta da regra (PT-BR)
+# ============================================================================
+
+routing_rules:
+
+  # =========================================================================
+  # 1. DEVELOPMENT
+  # =========================================================================
+
+  - intent: "code_implementation"
+    keywords:
+      - "implementar"
+      - "codar"
+      - "programar"
+      - "desenvolver"
+      - "feature"
+      - "bug fix"
+      - "refatorar"
+      - "codigo"
+      - "code"
+      - "develop"
+      - "funcionalidade"
+      - "corrigir bug"
+      - "criar componente"
+    agent: "@dev"
+    fallback: ["@architect", "@aios-master"]
+    priority: 9
+    category: "development"
+    description: "Implementacao de codigo, features, bug fixes e refatoracao"
+
+  - intent: "code_review"
+    keywords:
+      - "review"
+      - "qa"
+      - "testar"
+      - "qualidade"
+      - "validar codigo"
+      - "lint"
+      - "typecheck"
+      - "testes"
+      - "coverage"
+      - "qa gate"
+      - "qa-loop"
+    agent: "@qa"
+    fallback: ["@dev", "@aios-master"]
+    priority: 8
+    category: "development"
+    description: "Review de codigo, testes, QA gate e validacao de qualidade"
+
+  - intent: "architecture"
+    keywords:
+      - "arquitetura"
+      - "architecture"
+      - "design system"
+      - "stack"
+      - "tecnologia"
+      - "padrao"
+      - "pattern"
+      - "estrutura"
+      - "diagrama"
+      - "complexidade"
+      - "brownfield"
+      - "technical debt"
+      - "divida tecnica"
+    agent: "@architect"
+    fallback: ["@dev", "@aios-master"]
+    priority: 8
+    category: "development"
+    description: "Decisoes de arquitetura, stack, patterns e avaliacoes tecnicas"
+
+  - intent: "database"
+    keywords:
+      - "banco de dados"
+      - "database"
+      - "schema"
+      - "migration"
+      - "migracao"
+      - "SQL"
+      - "query"
+      - "index"
+      - "RLS"
+      - "tabela"
+      - "supabase"
+      - "postgresql"
+      - "DDL"
+    agent: "@data-engineer"
+    fallback: ["@architect", "@dev"]
+    priority: 8
+    category: "development"
+    description: "Schema, migrations, queries, RLS e otimizacao de banco de dados"
+
+  - intent: "deploy_devops"
+    keywords:
+      - "deploy"
+      - "push"
+      - "PR"
+      - "pull request"
+      - "CI/CD"
+      - "pipeline"
+      - "release"
+      - "git push"
+      - "merge"
+      - "produção"
+      - "VPS"
+      - "PM2"
+      - "nginx"
+      - "SSL"
+    agent: "@devops"
+    fallback: ["@ops-monitor", "@aios-master"]
+    priority: 10
+    category: "development"
+    description: "Deploy, git push, PRs, CI/CD e infraestrutura de release"
+
+  - intent: "ux_design"
+    keywords:
+      - "UX"
+      - "UI"
+      - "design"
+      - "interface"
+      - "wireframe"
+      - "prototipo"
+      - "usabilidade"
+      - "frontend spec"
+      - "layout"
+      - "responsivo"
+    agent: "@ux-design-expert"
+    fallback: ["@architect", "@dev"]
+    priority: 7
+    category: "development"
+    description: "Design de interface, UX, wireframes e especificacoes frontend"
+
+  - intent: "product_management"
+    keywords:
+      - "produto"
+      - "product"
+      - "roadmap"
+      - "backlog"
+      - "priorizacao"
+      - "discovery"
+      - "metricas produto"
+    agent: "@product"
+    fallback: ["@pm", "@po"]
+    priority: 7
+    category: "development"
+    description: "Gestao de produto, roadmap, priorizacao e discovery"
+
+  # =========================================================================
+  # 2. STORY MANAGEMENT
+  # =========================================================================
+
+  - intent: "story_creation"
+    keywords:
+      - "criar story"
+      - "create story"
+      - "nova story"
+      - "draft"
+      - "historia"
+      - "user story"
+      - "*draft"
+      - "*create-story"
+    agent: "@sm"
+    fallback: ["@pm", "@aios-master"]
+    priority: 9
+    category: "story_management"
+    description: "Criacao de stories a partir de epics/PRD"
+
+  - intent: "story_validation"
+    keywords:
+      - "validar story"
+      - "validate"
+      - "*validate"
+      - "aprovacao"
+      - "checklist"
+      - "GO/NO-GO"
+      - "story pronta"
+    agent: "@po"
+    fallback: ["@sm", "@aios-master"]
+    priority: 9
+    category: "story_management"
+    description: "Validacao de stories com checklist de 10 pontos"
+
+  - intent: "epic_management"
+    keywords:
+      - "epic"
+      - "epico"
+      - "criar epic"
+      - "*create-epic"
+      - "*execute-epic"
+      - "requisitos"
+      - "requirements"
+      - "spec"
+      - "PRD"
+    agent: "@pm"
+    fallback: ["@po", "@aios-master"]
+    priority: 9
+    category: "story_management"
+    description: "Gestao de epics, requisitos e spec pipeline"
+
+  # =========================================================================
+  # 3. MARKETING
+  # =========================================================================
+
+  - intent: "paid_ads"
+    keywords:
+      - "trafego"
+      - "ads"
+      - "Meta Ads"
+      - "Facebook Ads"
+      - "campanha"
+      - "CPL"
+      - "CPA"
+      - "ROAS"
+      - "escala"
+      - "anuncio"
+      - "criativo ads"
+      - "pixel"
+      - "conversao"
+      - "orcamento"
+    agent: "@traffic"
+    fallback: ["@creative-director", "@growth-hacker"]
+    priority: 9
+    category: "marketing"
+    description: "Gestao de trafego pago, Meta Ads, campanhas e otimizacao"
+
+  - intent: "copywriting"
+    keywords:
+      - "copy"
+      - "texto persuasivo"
+      - "headline"
+      - "CTA"
+      - "LP"
+      - "landing page"
+      - "email"
+      - "legenda"
+      - "script"
+      - "AIDA"
+      - "PAS"
+    agent: "@copywriter"
+    fallback: ["@content", "@creative-director"]
+    priority: 8
+    category: "marketing"
+    description: "Copy persuasivo, headlines, CTAs, scripts e LPs"
+
+  - intent: "creative_direction"
+    keywords:
+      - "direcao criativa"
+      - "criativo"
+      - "visual"
+      - "branding"
+      - "identidade visual"
+      - "template"
+      - "canvas"
+      - "imagem"
+    agent: "@creative-director"
+    fallback: ["@copywriter", "@content"]
+    priority: 8
+    category: "marketing"
+    description: "Direcao criativa, criativos visuais, branding e templates"
+
+  - intent: "cro_optimization"
+    keywords:
+      - "CRO"
+      - "conversao"
+      - "otimizar pagina"
+      - "taxa de conversao"
+      - "A/B test"
+      - "heatmap"
+      - "funil"
+      - "bounce"
+    agent: "@cro-specialist"
+    fallback: ["@copywriter", "@growth-hacker"]
+    priority: 7
+    category: "marketing"
+    description: "Otimizacao de conversao, testes A/B, funis e CRO"
+
+  - intent: "launch_strategy"
+    keywords:
+      - "lancamento"
+      - "launch"
+      - "go-to-market"
+      - "evento"
+      - "desafio"
+      - "webinar"
+      - "pre-lancamento"
+      - "captacao"
+      - "aquecimento"
+    agent: "@launch-strategist"
+    fallback: ["@pm", "@traffic"]
+    priority: 8
+    category: "marketing"
+    description: "Estrategia de lancamento, eventos, desafios e go-to-market"
+
+  - intent: "market_intelligence"
+    keywords:
+      - "pesquisa mercado"
+      - "concorrentes"
+      - "benchmarking"
+      - "tendencia"
+      - "nicho"
+      - "oportunidade"
+      - "analise mercado"
+      - "inteligencia"
+    agent: "@market-intel"
+    fallback: ["@analyst", "@growth-hacker"]
+    priority: 7
+    category: "marketing"
+    description: "Inteligencia de mercado, analise competitiva e tendencias"
+
+  # =========================================================================
+  # 4. CONTENT
+  # =========================================================================
+
+  - intent: "social_content"
+    keywords:
+      - "post"
+      - "instagram"
+      - "reel"
+      - "carrossel"
+      - "conteudo"
+      - "calendario editorial"
+      - "feed"
+      - "stories"
+      - "social media"
+      - "legenda"
+    agent: "@content"
+    fallback: ["@creative-director", "@copywriter"]
+    priority: 8
+    category: "content"
+    description: "Conteudo para redes sociais, posts, reels e calendario editorial"
+
+  - intent: "video_production"
+    keywords:
+      - "video"
+      - "edicao"
+      - "corte"
+      - "thumbnail"
+      - "YouTube"
+      - "TikTok"
+      - "reels"
+      - "dublagem"
+      - "transcricao"
+    agent: "@video-producer"
+    fallback: ["@voice-ai-specialist", "@content"]
+    priority: 7
+    category: "content"
+    description: "Producao de video, edicao, thumbnails e plataformas de video"
+
+  - intent: "growth_hacking"
+    keywords:
+      - "growth"
+      - "crescimento"
+      - "algoritmo"
+      - "viral"
+      - "engajamento"
+      - "alcance"
+      - "seguidores"
+      - "hack"
+      - "distribuicao"
+    agent: "@growth-hacker"
+    fallback: ["@content", "@traffic"]
+    priority: 7
+    category: "content"
+    description: "Growth hacking, algoritmos sociais, viralidade e distribuicao"
+
+  - intent: "voice_ai"
+    keywords:
+      - "voz"
+      - "voice"
+      - "TTS"
+      - "ASR"
+      - "dublagem"
+      - "narrador"
+      - "audio"
+      - "lip sync"
+      - "HeyGen"
+    agent: "@voice-ai-specialist"
+    fallback: ["@video-producer", "@dev"]
+    priority: 7
+    category: "content"
+    description: "Voice AI, TTS, ASR, dublagem e pipeline de audio"
+
+  # =========================================================================
+  # 5. SALES
+  # =========================================================================
+
+  - intent: "cold_outreach"
+    keywords:
+      - "cold email"
+      - "prospeccao"
+      - "outreach"
+      - "B2B"
+      - "lista"
+      - "prospectar"
+      - "lead"
+      - "ICP"
+    agent: "@cold-outreach"
+    fallback: ["@sdr", "@sales"]
+    priority: 8
+    category: "sales"
+    description: "Prospeccao B2B, cold email, listas e outreach"
+
+  - intent: "offer_engineering"
+    keywords:
+      - "oferta"
+      - "pricing"
+      - "preco"
+      - "stack de valor"
+      - "bonus"
+      - "irresistivel"
+      - "Hormozi"
+      - "proposta"
+      - "pacote"
+    agent: "@offer-engineer"
+    fallback: ["@closer", "@launch-strategist"]
+    priority: 8
+    category: "sales"
+    description: "Engenharia de oferta, stack de valor, pricing e propostas"
+
+  - intent: "whatsapp_automation"
+    keywords:
+      - "WhatsApp"
+      - "bot"
+      - "Baileys"
+      - "mensagem automatica"
+      - "nutricao"
+      - "sequencia"
+      - "chat"
+      - "atendimento automatico"
+    agent: "@whatsapp-specialist"
+    fallback: ["@automation-architect", "@dev"]
+    priority: 8
+    category: "sales"
+    description: "WhatsApp Bot, automacoes, sequencias e atendimento automatico"
+
+  - intent: "sales_closing"
+    keywords:
+      - "venda"
+      - "fechar"
+      - "negociacao"
+      - "objecao"
+      - "contorno"
+      - "closer"
+      - "high ticket"
+    agent: "@closer"
+    fallback: ["@sales", "@sdr"]
+    priority: 8
+    category: "sales"
+    description: "Fechamento de vendas, negociacao e contorno de objecoes"
+
+  - intent: "sales_pipeline"
+    keywords:
+      - "SDR"
+      - "qualificacao"
+      - "pipeline"
+      - "funil vendas"
+      - "CRM"
+      - "follow up"
+    agent: "@sdr"
+    fallback: ["@closer", "@sales"]
+    priority: 7
+    category: "sales"
+    description: "Qualificacao de leads, pipeline de vendas e CRM"
+
+  - intent: "customer_success"
+    keywords:
+      - "cliente"
+      - "suporte"
+      - "onboarding"
+      - "retencao"
+      - "churn"
+      - "NPS"
+      - "satisfacao"
+      - "sucesso do cliente"
+    agent: "@cs"
+    fallback: ["@cs-retention", "@mentor"]
+    priority: 7
+    category: "sales"
+    description: "Customer success, onboarding, suporte e satisfacao"
+
+  - intent: "events_management"
+    keywords:
+      - "evento presencial"
+      - "workshop"
+      - "meetup"
+      - "organizacao evento"
+      - "ingressos"
+      - "local"
+      - "logistica evento"
+    agent: "@events"
+    fallback: ["@launch-strategist", "@ops"]
+    priority: 7
+    category: "sales"
+    description: "Gestao de eventos presenciais, workshops e logistica"
+
+  # =========================================================================
+  # 6. OPERATIONS
+  # =========================================================================
+
+  - intent: "infrastructure_monitoring"
+    keywords:
+      - "monitoramento"
+      - "server"
+      - "uptime"
+      - "log"
+      - "erro servidor"
+      - "PM2"
+      - "memoria"
+      - "CPU"
+      - "alerta"
+      - "health check"
+    agent: "@ops-monitor"
+    fallback: ["@devops", "@ops"]
+    priority: 9
+    category: "operations"
+    description: "Monitoramento de infraestrutura, logs, alertas e health checks"
+
+  - intent: "automation_workflows"
+    keywords:
+      - "automacao"
+      - "n8n"
+      - "Make"
+      - "webhook"
+      - "workflow"
+      - "pipeline"
+      - "integracao"
+      - "cron"
+      - "scheduler"
+      - "trigger"
+    agent: "@automation-architect"
+    fallback: ["@workflow-orchestrator", "@dev"]
+    priority: 8
+    category: "operations"
+    description: "Automacoes, workflows n8n/Make, webhooks e pipelines"
+
+  - intent: "workflow_orchestration"
+    keywords:
+      - "orquestrar"
+      - "multi-step"
+      - "orquestracao"
+      - "sequencia de tarefas"
+      - "coordenar"
+      - "batch"
+    agent: "@workflow-orchestrator"
+    fallback: ["@automation-architect", "@aios-master"]
+    priority: 7
+    category: "operations"
+    description: "Orquestracao de workflows multi-step e coordenacao de tarefas"
+
+  - intent: "financial_operations"
+    keywords:
+      - "financeiro"
+      - "receita"
+      - "despesa"
+      - "fluxo de caixa"
+      - "faturamento"
+      - "DRE"
+      - "orcamento"
+      - "custo"
+    agent: "@cfo"
+    fallback: ["@fin-plat", "@fin-assist"]
+    priority: 7
+    category: "operations"
+    description: "Gestao financeira, fluxo de caixa, DRE e orcamentos"
+
+  - intent: "operations_general"
+    keywords:
+      - "operacao"
+      - "processo"
+      - "SOP"
+      - "padronizar"
+      - "eficiencia"
+      - "gargalo"
+      - "rotina"
+    agent: "@ops"
+    fallback: ["@chief", "@aios-master"]
+    priority: 6
+    category: "operations"
+    description: "Operacoes gerais, SOPs, processos e eficiencia"
+
+  # =========================================================================
+  # 7. INTELLIGENCE
+  # =========================================================================
+
+  - intent: "data_analysis"
+    keywords:
+      - "analise"
+      - "dados"
+      - "relatorio"
+      - "metricas"
+      - "KPI"
+      - "dashboard"
+      - "insight"
+      - "performance"
+      - "estatistica"
+    agent: "@analyst"
+    fallback: ["@data-engineer", "@pm"]
+    priority: 8
+    category: "intelligence"
+    description: "Analise de dados, relatorios, metricas e insights"
+
+  - intent: "rag_knowledge"
+    keywords:
+      - "RAG"
+      - "vector"
+      - "embedding"
+      - "knowledge base"
+      - "base de conhecimento"
+      - "memoria"
+      - "indexar"
+      - "busca semantica"
+    agent: "@rag-architect"
+    fallback: ["@architect", "@dev"]
+    priority: 7
+    category: "intelligence"
+    description: "Arquitetura RAG, vector stores, embeddings e bases de conhecimento"
+
+  - intent: "swarm_simulation"
+    keywords:
+      - "simulacao"
+      - "swarm"
+      - "MiroFish"
+      - "multi-agente"
+      - "predicao"
+      - "cenario"
+      - "modelagem"
+    agent: "@swarm-simulator"
+    fallback: ["@analyst", "@architect"]
+    priority: 6
+    category: "intelligence"
+    description: "Simulacao multi-agente, MiroFish, predicoes e modelagem de cenarios"
+
+  - intent: "devils_advocate"
+    keywords:
+      - "advogado do diabo"
+      - "critica"
+      - "riscos"
+      - "contra-argumento"
+      - "suposicao"
+      - "fragilidade"
+      - "ponto fraco"
+      - "desafiar"
+    agent: "@advogado-do-diabo"
+    fallback: ["@mestre-do-conselho", "@analyst"]
+    priority: 7
+    category: "intelligence"
+    description: "Analise critica, riscos, suposicoes ocultas e contra-argumentos"
+
+  # =========================================================================
+  # 8. FRAMEWORK & GOVERNANCE
+  # =========================================================================
+
+  - intent: "framework_governance"
+    keywords:
+      - "framework"
+      - "Segunda-feira"
+      - "constituicao"
+      - "regra"
+      - "governance"
+      - "agente"
+      - "task"
+      - "aios"
+    agent: "@aios-master"
+    fallback: ["@chief"]
+    priority: 10
+    category: "framework"
+    description: "Governanca do framework, constituicao e regras do sistema"
+
+  - intent: "agent_council"
+    keywords:
+      - "conselho"
+      - "deliberacao"
+      - "perspectivas"
+      - "debate"
+      - "multi-perspectiva"
+      - "decisao complexa"
+      - "opinioes"
+    agent: "@mestre-do-conselho"
+    fallback: ["@advogado-do-diabo", "@aios-master"]
+    priority: 7
+    category: "framework"
+    description: "Conselho deliberativo multi-perspectiva e sintese de decisoes"
+
+  - intent: "prompt_engineering"
+    keywords:
+      - "prompt"
+      - "system prompt"
+      - "instruction"
+      - "context engineering"
+      - "few-shot"
+      - "chain of thought"
+      - "safety"
+    agent: "@prompt-engineer"
+    fallback: ["@vibe-coder", "@architect"]
+    priority: 7
+    category: "framework"
+    description: "Engenharia de prompts, system prompts e context engineering"
+
+  - intent: "vibe_coding"
+    keywords:
+      - "vibe"
+      - "BLAST"
+      - "rapid prototyping"
+      - "prototipo rapido"
+      - "hackathon"
+      - "MVP"
+      - "speed coding"
+    agent: "@vibe-coder"
+    fallback: ["@dev", "@architect"]
+    priority: 7
+    category: "framework"
+    description: "Vibe coding, B.L.A.S.T., prototipacao rapida e MVPs"
+
+  - intent: "squad_creation"
+    keywords:
+      - "squad"
+      - "time"
+      - "montar equipe"
+      - "criar squad"
+      - "composicao"
+      - "formacao"
+    agent: "@squad-creator"
+    fallback: ["@aios-master", "@chief"]
+    priority: 7
+    category: "framework"
+    description: "Criacao e composicao de squads e equipes de agentes"
+
+  - intent: "strategic_leadership"
+    keywords:
+      - "estrategia"
+      - "visao"
+      - "OKR"
+      - "meta"
+      - "direcao"
+      - "empresa"
+      - "crescimento empresa"
+    agent: "@chief"
+    fallback: ["@aios-master", "@pm"]
+    priority: 8
+    category: "framework"
+    description: "Lideranca estrategica, visao, OKRs e direcao da empresa"
+
+  - intent: "mentorship"
+    keywords:
+      - "mentoria"
+      - "mentor"
+      - "ensinar"
+      - "aluno"
+      - "aula"
+      - "educacao"
+      - "curso"
+      - "treinamento"
+    agent: "@mentor"
+    fallback: ["@content", "@cs"]
+    priority: 7
+    category: "framework"
+    description: "Mentoria, educacao, treinamento e acompanhamento de alunos"
+
+# ============================================================================
+# MULTI-AGENT COLLABORATION
+# ============================================================================
+# Tarefas complexas que requerem colaboracao entre multiplos agentes.
+# O primeiro agente da lista e o lider/coordenador.
+# ============================================================================
+
+multi_agent:
+
+  - intent: "full_launch"
+    keywords:
+      - "lancamento completo"
+      - "lançar produto"
+      - "campanha completa"
+      - "go-to-market completo"
+    agents:
+      - role: "leader"
+        agent: "@launch-strategist"
+      - role: "copy"
+        agent: "@copywriter"
+      - role: "creative"
+        agent: "@creative-director"
+      - role: "traffic"
+        agent: "@traffic"
+      - role: "automation"
+        agent: "@automation-architect"
+    description: "Lancamento completo: estrategia + copy + criativos + trafego + automacao"
+
+  - intent: "full_stack_feature"
+    keywords:
+      - "feature completa"
+      - "funcionalidade end-to-end"
+      - "full stack"
+    agents:
+      - role: "architect"
+        agent: "@architect"
+      - role: "database"
+        agent: "@data-engineer"
+      - role: "frontend_backend"
+        agent: "@dev"
+      - role: "qa"
+        agent: "@qa"
+      - role: "deploy"
+        agent: "@devops"
+    description: "Feature full stack: arquitetura + DB + dev + QA + deploy"
+
+  - intent: "content_campaign"
+    keywords:
+      - "campanha de conteudo"
+      - "producao de conteudo"
+      - "conteudo semanal"
+      - "batch de posts"
+    agents:
+      - role: "strategy"
+        agent: "@content"
+      - role: "copy"
+        agent: "@copywriter"
+      - role: "creative"
+        agent: "@creative-director"
+      - role: "growth"
+        agent: "@growth-hacker"
+    description: "Campanha de conteudo: estrategia + copy + criativos + growth"
+
+  - intent: "sales_pipeline_setup"
+    keywords:
+      - "pipeline de vendas completo"
+      - "funil de vendas"
+      - "maquina de vendas"
+    agents:
+      - role: "prospection"
+        agent: "@cold-outreach"
+      - role: "qualification"
+        agent: "@sdr"
+      - role: "closing"
+        agent: "@closer"
+      - role: "offer"
+        agent: "@offer-engineer"
+      - role: "whatsapp"
+        agent: "@whatsapp-specialist"
+    description: "Pipeline de vendas: prospeccao + qualificacao + fechamento + oferta + WhatsApp"
+
+  - intent: "technical_assessment"
+    keywords:
+      - "avaliacao tecnica"
+      - "brownfield completo"
+      - "auditoria sistema"
+    agents:
+      - role: "architecture"
+        agent: "@architect"
+      - role: "database"
+        agent: "@data-engineer"
+      - role: "ux"
+        agent: "@ux-design-expert"
+      - role: "qa"
+        agent: "@qa"
+      - role: "report"
+        agent: "@analyst"
+    description: "Avaliacao tecnica completa: arquitetura + DB + UX + QA + relatorio"
+
+  - intent: "strategic_decision"
+    keywords:
+      - "decisao estrategica"
+      - "deliberacao"
+      - "avaliar opcoes"
+      - "conselho completo"
+    agents:
+      - role: "facilitator"
+        agent: "@mestre-do-conselho"
+      - role: "critic"
+        agent: "@advogado-do-diabo"
+      - role: "data"
+        agent: "@analyst"
+      - role: "market"
+        agent: "@market-intel"
+    description: "Decisao estrategica: conselho + critica + dados + inteligencia de mercado"
+
+  - intent: "automation_full"
+    keywords:
+      - "automacao completa"
+      - "sistema automatizado"
+      - "automatizar tudo"
+    agents:
+      - role: "architect"
+        agent: "@automation-architect"
+      - role: "orchestrator"
+        agent: "@workflow-orchestrator"
+      - role: "dev"
+        agent: "@dev"
+      - role: "whatsapp"
+        agent: "@whatsapp-specialist"
+    description: "Automacao completa: arquitetura + orquestracao + dev + WhatsApp"
+
+  - intent: "event_launch"
+    keywords:
+      - "lancamento evento"
+      - "evento + captacao"
+      - "desafio completo"
+    agents:
+      - role: "events"
+        agent: "@events"
+      - role: "launch"
+        agent: "@launch-strategist"
+      - role: "traffic"
+        agent: "@traffic"
+      - role: "copy"
+        agent: "@copywriter"
+      - role: "whatsapp"
+        agent: "@whatsapp-specialist"
+    description: "Lancamento de evento: logistica + estrategia + trafego + copy + WhatsApp"
+
+# ============================================================================
+# ROUTING METADATA
+# ============================================================================
+
+metadata:
+  total_rules: 40
+  total_single_agent_rules: 33
+  total_multi_agent_rules: 8
+  categories:
+    - development
+    - story_management
+    - marketing
+    - content
+    - sales
+    - operations
+    - intelligence
+    - framework
+  agents_covered: 47
+  last_updated: "2026-03-29"
+  author: "Segunda-feira Framework"

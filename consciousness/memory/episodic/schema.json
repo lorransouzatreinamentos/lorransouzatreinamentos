@@ -1,0 +1,41 @@
+{
+  "_schema_version": "1.0",
+  "_description": "Schema da memoria episodica — eventos com contexto temporal e valencia afetiva",
+  "episode": {
+    "id": "ep_{agent}_{timestamp}",
+    "agent": "@agent-name",
+    "timestamp": "ISO-8601",
+    "type": "task_completed|task_failed|decision_made|insight_discovered|collaboration|error_recovered|pattern_detected",
+    "summary": "Descricao concisa do evento (1-2 frases)",
+    "context": {
+      "story_id": "ID da story (se aplicavel)",
+      "task": "Nome/descricao da tarefa",
+      "trigger": "O que iniciou este evento",
+      "participants": ["@agentes envolvidos"],
+      "tools_used": ["ferramentas/skills utilizadas"],
+      "duration_minutes": 0
+    },
+    "outcome": {
+      "result": "success|partial|failure",
+      "details": "O que aconteceu especificamente",
+      "metrics": {}
+    },
+    "valence": {
+      "score": 0.0,
+      "label": "positive|neutral|negative",
+      "intensity": 0.0,
+      "reason": "Por que essa valencia (o que causou a reacao)"
+    },
+    "lessons": {
+      "what_worked": "O que funcionou bem",
+      "what_failed": "O que nao funcionou",
+      "heuristic": "Regra extraida: 'Quando X, fazer Y porque Z'"
+    },
+    "connections": {
+      "related_episodes": ["IDs de episodios relacionados"],
+      "related_patterns": ["patterns/ que se aplicam"],
+      "related_facts": ["fatos semanticos relevantes"]
+    },
+    "consolidation_status": "raw|processed|consolidated|archived"
+  }
+}
