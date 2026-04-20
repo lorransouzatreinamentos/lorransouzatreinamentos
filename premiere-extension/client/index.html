@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Claudio Cuts</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header class="topbar">
+            <div class="logo">
+                <span class="logo-mark">◆</span>
+                <span class="logo-text">Claudio Cuts</span>
+            </div>
+            <button id="btn-settings" class="icon-btn" title="Configurações">⚙</button>
+        </header>
+
+        <!-- ============ MAIN VIEW ============ -->
+        <main id="view-main" class="view active">
+            <section class="dropzone-section">
+                <div id="dropzone" class="dropzone">
+                    <div class="dropzone-inner">
+                        <div class="dropzone-icon">▼</div>
+                        <div class="dropzone-title">Arraste o vídeo aqui</div>
+                        <div class="dropzone-hint">ou clique para selecionar da biblioteca</div>
+                    </div>
+                </div>
+                <div id="clip-info" class="clip-info hidden">
+                    <div class="clip-name" id="clip-name">—</div>
+                    <div class="clip-meta" id="clip-meta">—</div>
+                    <button class="link-btn" id="btn-clear-clip">Trocar vídeo</button>
+                </div>
+            </section>
+
+            <section class="form-section">
+                <div class="field">
+                    <div class="field-header">
+                        <label for="prompt">Briefing (prompt)</label>
+                        <div class="field-actions">
+                            <button class="link-btn" id="btn-load-template">📂 Carregar</button>
+                            <button class="link-btn" id="btn-save-template">💾 Salvar</button>
+                        </div>
+                    </div>
+                    <textarea id="prompt" rows="4"
+                        placeholder="Ex: Quero trechos com ganchos fortes que falem sobre produtividade, para virar Reels de Instagram."></textarea>
+                </div>
+
+                <div class="field">
+                    <label>Modo de extração</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="mode" value="continuous" checked>
+                            <div class="radio-body">
+                                <div class="radio-title">Trecho contínuo</div>
+                                <div class="radio-desc">Uma janela fechada, sem cortes internos</div>
+                            </div>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="mode" value="compilation">
+                            <div class="radio-body">
+                                <div class="radio-title">Compilação (multi-cut)</div>
+                                <div class="radio-desc">Monta vídeo costurando trechos de momentos diferentes</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="field half">
+                        <label for="dur-min">Duração mín (s)</label>
+                        <input type="number" id="dur-min" value="30" min="5" max="600">
+                    </div>
+                    <div class="field half">
+                        <label for="dur-max">Duração máx (s)</label>
+                        <input type="number" id="dur-max" value="90" min="5" max="600">
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="count">Quantidade de variações</label>
+                    <input type="number" id="count" value="3" min="1" max="10">
+                </div>
+
+                <div class="field">
+                    <label for="model-select">Modelo de IA</label>
+                    <select id="model-select"></select>
+                </div>
+            </section>
+
+            <section class="actions">
+                <button id="btn-start" class="btn-primary" disabled>
+                    <span class="btn-label">Iniciar extração</span>
+                </button>
+            </section>
+
+            <!-- Progress -->
+            <section id="progress" class="progress hidden">
+                <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                <div class="progress-label" id="progress-label">Processando…</div>
+            </section>
+
+            <!-- Results -->
+            <section id="results" class="results hidden">
+                <div class="results-header">
+                    <h3>Trechos sugeridos</h3>
+                    <button class="link-btn" id="btn-select-all">Selecionar todos</button>
+                </div>
+                <div id="results-list" class="results-list"></div>
+                <div class="results-actions">
+                    <button id="btn-insert" class="btn-primary">Adicionar à timeline</button>
+                    <label class="checkbox-line">
+                        <input type="checkbox" id="new-sequence" checked>
+                        Criar nova sequência
+                    </label>
+                </div>
+            </section>
+
+            <div id="toast" class="toast hidden"></div>
+        </main>
+
+        <!-- ============ SETTINGS VIEW ============ -->
+        <section id="view-settings" class="view">
+            <header class="view-header">
+                <button class="icon-btn" id="btn-back-settings">←</button>
+                <h2>Configurações</h2>
+            </header>
+
+            <div class="settings-body">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="providers">Providers</button>
+                    <button class="tab-btn" data-tab="templates">Templates</button>
+                    <button class="tab-btn" data-tab="about">Sobre</button>
+                </div>
+
+                <!-- Tab Providers -->
+                <div class="tab-content active" data-tab="providers">
+                    <div class="provider-card">
+                        <div class="provider-head">
+                            <strong>Claude (Anthropic)</strong>
+                            <span class="badge">Recomendado</span>
+                        </div>
+                        <input type="password" id="key-anthropic" placeholder="sk-ant-...">
+                        <select id="model-anthropic">
+                            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (rápido/barato)</option>
+                            <option value="claude-sonnet-4-6" selected>Sonnet 4.6 (equilibrado)</option>
+                            <option value="claude-opus-4-7">Opus 4.7 (máxima qualidade)</option>
+                        </select>
+                        <button class="btn-secondary" data-test="anthropic">Testar conexão</button>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-head"><strong>OpenAI</strong></div>
+                        <input type="password" id="key-openai" placeholder="sk-...">
+                        <select id="model-openai">
+                            <option value="gpt-4o-mini" selected>GPT-4o mini</option>
+                            <option value="gpt-4o">GPT-4o</option>
+                            <option value="gpt-5">GPT-5</option>
+                        </select>
+                        <button class="btn-secondary" data-test="openai">Testar conexão</button>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-head"><strong>Google Gemini</strong></div>
+                        <input type="password" id="key-gemini" placeholder="AIza...">
+                        <select id="model-gemini">
+                            <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        </select>
+                        <button class="btn-secondary" data-test="gemini">Testar conexão</button>
+                    </div>
+
+                    <button class="btn-primary" id="btn-save-providers">Salvar chaves</button>
+                    <p class="note">🔒 Chaves armazenadas localmente e criptografadas. Nunca enviadas para servidores externos além do próprio provider escolhido.</p>
+                </div>
+
+                <!-- Tab Templates -->
+                <div class="tab-content" data-tab="templates">
+                    <p class="note">Templates salvos de briefing para reuso rápido.</p>
+                    <div id="templates-list" class="templates-list"></div>
+                    <div class="template-editor">
+                        <input type="text" id="tpl-name" placeholder="Nome do template (ex: Pegada emocional)">
+                        <textarea id="tpl-content" rows="4" placeholder="Briefing do template..."></textarea>
+                        <button class="btn-primary" id="btn-create-template">Criar template</button>
+                    </div>
+                </div>
+
+                <!-- Tab About -->
+                <div class="tab-content" data-tab="about">
+                    <div class="about">
+                        <h3>Claudio Cuts</h3>
+                        <p>Extensão para Adobe Premiere Pro que extrai os melhores trechos de vídeos usando IA.</p>
+                        <ul>
+                            <li><strong>Transcrição:</strong> nativa do Premiere (Speech to Text)</li>
+                            <li><strong>Providers:</strong> Claude, OpenAI, Gemini</li>
+                            <li><strong>Modos:</strong> trecho contínuo ou compilação multi-cut</li>
+                            <li><strong>Timeline:</strong> insere subclipes não-destrutivos</li>
+                        </ul>
+                        <p class="muted">v1.0.0 — Segunda-feira Framework</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ MODAL: LOAD TEMPLATE ============ -->
+        <div id="modal-load" class="modal hidden">
+            <div class="modal-body">
+                <h3>Carregar template</h3>
+                <div id="modal-templates-list" class="templates-list"></div>
+                <button class="btn-secondary" id="btn-close-modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/CSInterface.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/providers.js"></script>
+    <script src="js/templates.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
