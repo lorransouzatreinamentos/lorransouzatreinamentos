@@ -1,0 +1,241 @@
+================================================================================
+                    CLAUDIO CUTS — INSTRUÇÕES DE INSTALAÇÃO
+                       Extensão para Adobe Premiere Pro
+================================================================================
+
+O QUE É
+-------
+Extensão que extrai os melhores trechos de um vídeo usando IA (Claude, OpenAI
+ou Gemini) e insere automaticamente na timeline do Premiere Pro.
+
+
+================================================================================
+PASSO 1 — HABILITAR MODO DEBUG DO PREMIERE
+================================================================================
+
+O Premiere só carrega extensões não-assinadas se o modo debug estiver ativado.
+
+>> MAC (Terminal):
+
+    defaults write com.adobe.CSXS.11 PlayerDebugMode 1
+    defaults write com.adobe.CSXS.10 PlayerDebugMode 1
+    defaults write com.adobe.CSXS.9 PlayerDebugMode 1
+
+>> WINDOWS (PowerShell como Admin):
+
+    reg add HKCU\Software\Adobe\CSXS.11 /v PlayerDebugMode /t REG_SZ /d 1 /f
+    reg add HKCU\Software\Adobe\CSXS.10 /v PlayerDebugMode /t REG_SZ /d 1 /f
+    reg add HKCU\Software\Adobe\CSXS.9 /v PlayerDebugMode /t REG_SZ /d 1 /f
+
+** FECHE E ABRA O PREMIERE depois de rodar esses comandos. **
+
+
+================================================================================
+PASSO 2 — BAIXAR A EXTENSÃO
+================================================================================
+
+Baixe o arquivo:
+
+    premiere-extension/build/ClaudioCuts.zip
+
+Do repositório:
+
+    https://github.com/lorransouzatreinamentos/lorransouzatreinamentos
+
+Ou pelo terminal:
+
+    git clone https://github.com/lorransouzatreinamentos/lorransouzatreinamentos
+    cd lorransouzatreinamentos
+    git checkout claude/premiere-video-extraction-5rwlQ
+
+
+================================================================================
+PASSO 3 — INSTALAR
+================================================================================
+
+>> MAC:
+
+    mkdir -p ~/Library/Application\ Support/Adobe/CEP/extensions/ClaudioCuts
+    unzip ClaudioCuts.zip -d ~/Library/Application\ Support/Adobe/CEP/extensions/ClaudioCuts
+
+>> WINDOWS (PowerShell):
+
+    Expand-Archive ClaudioCuts.zip -DestinationPath "$env:APPDATA\Adobe\CEP\extensions\ClaudioCuts"
+
+
+================================================================================
+PASSO 4 — ABRIR NO PREMIERE
+================================================================================
+
+1. Abra o Adobe Premiere Pro
+2. Menu:    Window  >  Extensions  >  Claudio Cuts
+3. O painel aparece no lado direito — arraste para onde preferir
+
+
+================================================================================
+PASSO 5 — CONFIGURAR SUA API DE IA
+================================================================================
+
+Você precisa de pelo menos UMA API key de algum provider:
+
+>> CLAUDE (Anthropic) — recomendado, mais inteligente:
+   https://console.anthropic.com/settings/keys
+
+>> OPENAI (GPT):
+   https://platform.openai.com/api-keys
+
+>> GEMINI (Google) — mais barato:
+   https://aistudio.google.com/app/apikey
+
+Na extensão:
+
+1. Clique no ícone de engrenagem (canto superior direito)
+2. Aba "Providers"
+3. Cole a API key do provider escolhido
+4. Selecione o modelo (Haiku = rápido, Sonnet = equilibrado, Opus = máxima qualidade)
+5. Clique em "Testar conexão"  →  deve mostrar "Conexão OK"
+6. Clique em "Salvar chaves"
+
+
+================================================================================
+PASSO 6 — COMO USAR
+================================================================================
+
+>> PREPARAÇÃO DO VÍDEO:
+
+1. Importe o vídeo no Premiere (biblioteca do projeto)
+2. Gere a transcrição:
+      Window  >  Text  >  Transcript  >  Transcrever
+3. Exporte a transcrição como SRT:
+      Clique direito na transcrição  >  Exportar  >  SRT
+      Salve com o MESMO NOME do vídeo (ex: video.mp4 → video.srt)
+      na mesma pasta do vídeo
+
+>> EXTRAÇÃO:
+
+1. Na extensão, clique na área "Arraste o vídeo aqui"
+   (vai pegar o clipe selecionado no painel Project)
+
+2. Escreva o briefing. Exemplos:
+
+   → "Quero trechos com ganchos fortes sobre produtividade, para virar
+      Reels de Instagram."
+
+   → "Extraia momentos emocionais de superação para TikTok."
+
+   → "Encontre insights sobre vendas B2B com dados ou cases."
+
+3. Escolha o MODO:
+
+   [•] TRECHO CONTÍNUO
+       Uma janela fechada do vídeo, sem cortes internos.
+       Exemplo: dos 1:20 aos 2:35 (75 segundos contínuos).
+
+   [ ] COMPILAÇÃO MULTI-CUT
+       A IA costura pedaços de momentos diferentes.
+       Exemplo: hook dos 0:15 + desenvolvimento dos 3:40 + CTA dos 8:12.
+
+4. Ajuste duração (mín/máx em segundos) e quantidade de variações
+
+5. Selecione o modelo de IA (dropdown)
+
+6. Clique em "INICIAR EXTRAÇÃO"
+   Aguarde 30 segundos a 3 minutos dependendo do tamanho do vídeo
+
+7. Revise os trechos sugeridos:
+   - Cada um mostra timestamp, duração e motivo
+   - Desmarque os que você não quer
+
+8. Marque "Criar nova sequência" (recomendado na primeira vez)
+
+9. Clique em "ADICIONAR À TIMELINE"
+   → Os trechos aparecem cortados e sincronizados na timeline
+
+
+================================================================================
+TEMPLATES DE BRIEFING (reutilize prompts)
+================================================================================
+
+SALVAR UM TEMPLATE:
+1. Escreva o briefing na tela principal
+2. Clique em "💾 Salvar"
+3. Dê um nome (ex: "Pegada emocional")
+
+CARREGAR UM TEMPLATE:
+1. Clique em "📂 Carregar"
+2. Escolha o template da lista
+
+Templates prontos já incluídos:
+  - Pegada emocional
+  - Financeiro / Empresarial
+  - Reels educacionais
+
+GERENCIAR TEMPLATES:
+Engrenagem  >  aba Templates  →  criar, editar, excluir
+
+
+================================================================================
+PROBLEMAS COMUNS
+================================================================================
+
+>> "Claudio Cuts" não aparece no menu Extensions:
+   → Verifique se habilitou PlayerDebugMode (Passo 1)
+   → Feche COMPLETAMENTE o Premiere e abra de novo
+   → Confirme que a pasta está no local certo
+
+>> "Transcrição não encontrada":
+   → Você precisa GERAR a transcrição no Premiere antes
+   → Window > Text > Transcript > Transcrever
+   → Depois exportar como SRT ao lado do vídeo
+
+>> "Falha na extração" ou "API error":
+   → Teste a conexão nas Settings
+   → Verifique se tem crédito no provider
+   → Tente outro modelo (Sonnet 4.6 geralmente funciona)
+
+>> "Sem sequência ativa":
+   → Marque "Criar nova sequência" antes de inserir
+   → Ou crie manualmente uma sequência vazia primeiro
+
+>> Inserção insere mas não corta direito:
+   → A IA retorna timestamps em segundos — qualidade do corte
+     depende da precisão da transcrição. Use Sonnet 4.6 ou Opus 4.7
+     para maior precisão no modo compilação.
+
+
+================================================================================
+CUSTOS ESTIMADOS (por vídeo de 10 minutos)
+================================================================================
+
+  Claude Haiku 4.5    →  ~$0,002   (mais barato e rápido)
+  Claude Sonnet 4.6   →  ~$0,02    (equilibrado, RECOMENDADO)
+  Claude Opus 4.7     →  ~$0,15    (máxima qualidade)
+  GPT-4o mini         →  ~$0,003
+  GPT-4o              →  ~$0,05
+  Gemini 2.5 Flash    →  ~$0,001   (mais barato)
+  Gemini 2.5 Pro      →  ~$0,03
+
+
+================================================================================
+SEGURANÇA DAS API KEYS
+================================================================================
+
+As API keys ficam APENAS na sua máquina (localStorage do navegador embutido
+do Premiere), com ofuscação XOR+base64.
+
+NUNCA são enviadas para servidores terceiros além do próprio provider
+que você escolheu (Anthropic / OpenAI / Google).
+
+
+================================================================================
+SUPORTE E CONTATO
+================================================================================
+
+Documentação completa:  premiere-extension/README.md
+Repositório:            https://github.com/lorransouzatreinamentos/lorransouzatreinamentos
+Branch:                 claude/premiere-video-extraction-5rwlQ
+
+
+================================================================================
+Construído com Segunda-feira Framework v7.0
+================================================================================
