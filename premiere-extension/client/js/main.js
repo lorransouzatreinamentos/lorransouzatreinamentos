@@ -1,41 +1,48 @@
 /**
  * FASTVIDEO — main controller.
- * Orquestra: dropzone → transcrição (Premiere) → provider IA → inserção timeline.
+ * Fluxo: selecionar clipe → carregar transcrição (arquivo/paste) →
+ *        briefing → provider IA → inserção timeline.
  */
 (function() {
     const cs = new CSInterface();
     const state = {
-        projectItem: null,  // { name, path, nodeId, durationSeconds }
-        transcript: null,   // string "[mm:ss] texto..."
-        results: null,      // output bruto do provider
+        projectItem: null,   // { name, path, nodeId, durationSeconds }
+        transcript: null,    // string normalizada "[mm:ss] texto..."
+        transcriptMeta: null,// { format, segments, sourceName }
+        results: null,
         providerId: 'anthropic',
         model: 'claude-sonnet-4-6'
     };
 
-    // ==================== INIT ====================
     document.addEventListener('DOMContentLoaded', init);
 
     function init() {
         loadProviders();
         refreshModelDropdown();
+        wireNav();
         wireMainView();
+        wireTranscript();
         wireSettings();
         wireTemplates();
         wireModals();
         refreshTemplatesUI();
     }
 
-    // ==================== VIEWS ====================
+    // ==================== NAV ====================
+    function wireNav() {
+        document.getElementById('btn-settings').onclick = () => showView('settings');
+        document.getElementById('btn-manual').onclick = () => showView('manual');
+        document.getElementById('btn-back-settings').onclick = () => showView('main');
+        document.getElementById('btn-back-manual').onclick = () => showView('main');
+    }
+
     function showView(id) {
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         document.getElementById('view-' + id).classList.add('active');
     }
 
+    // ==================== SETTINGS ====================
     function wireSettings() {
-        document.getElementById('btn-settings').onclick = () => showView('settings');
-        document.getElementById('btn-back-settings').onclick = () => showView('main');
-
-        // Tabs
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.onclick = () => {
                 const tab = btn.dataset.tab;
@@ -44,7 +51,6 @@
             };
         });
 
-        // Load providers into inputs
         const p = Storage.getProviders();
         document.getElementById('key-anthropic').value = p.anthropic?.apiKey || '';
         document.getElementById('key-openai').value = p.openai?.apiKey || '';
@@ -55,24 +61,15 @@
 
         document.getElementById('btn-save-providers').onclick = () => {
             Storage.saveProviders({
-                anthropic: {
-                    apiKey: document.getElementById('key-anthropic').value,
-                    model: document.getElementById('model-anthropic').value
-                },
-                openai: {
-                    apiKey: document.getElementById('key-openai').value,
-                    model: document.getElementById('model-openai').value
-                },
-                gemini: {
-                    apiKey: document.getElementById('key-gemini').value,
-                    model: document.getElementById('model-gemini').value
-                }
+                anthropic: { apiKey: document.getElementById('key-anthropic').value, model: document.getElementById('model-anthropic').value },
+                openai:    { apiKey: document.getElementById('key-openai').value,    model: document.getElementById('model-openai').value },
+                gemini:    { apiKey: document.getElementById('key-gemini').value,    model: document.getElementById('model-gemini').value }
             });
             refreshModelDropdown();
+            updateStartButton();
             toast('Chaves salvas com sucesso', 'success');
         };
 
-        // Test buttons
         document.querySelectorAll('[data-test]').forEach(btn => {
             btn.onclick = async () => {
                 const id = btn.dataset.test;
@@ -117,9 +114,15 @@
             });
             select.appendChild(group);
         });
-        // Restore last selection
         const prefs = Storage.getPreferences();
-        if (prefs.lastSelection) select.value = prefs.lastSelection;
+        if (prefs.lastSelection) {
+            const opt = Array.from(select.options).find(o => o.value === prefs.lastSelection && !o.disabled);
+            if (opt) select.value = prefs.lastSelection;
+        }
+        if (!select.value) {
+            const firstEnabled = Array.from(select.options).find(o => !o.disabled);
+            if (firstEnabled) select.value = firstEnabled.value;
+        }
         select.onchange = () => {
             const [pid, mid] = select.value.split('::');
             state.providerId = pid;
@@ -135,44 +138,20 @@
 
     // ==================== MAIN VIEW ====================
     function wireMainView() {
-        const dropzone = document.getElementById('dropzone');
-
-        dropzone.addEventListener('dragover', e => {
-            e.preventDefault();
-            dropzone.classList.add('dragover');
-        });
-        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-        dropzone.addEventListener('drop', e => {
-            e.preventDefault();
-            dropzone.classList.remove('dragover');
-            handleDrop(e);
-        });
-        dropzone.addEventListener('click', () => {
-            // Pega item selecionado no project panel
-            cs.evalScript('CC.getSelectedProjectItem()', (res) => {
-                handleHostResult(res);
-            });
-        });
-
+        document.getElementById('btn-select-clip').onclick = () => {
+            cs.evalScript('CC.getSelectedProjectItem()', handleHostResult);
+        };
         document.getElementById('btn-clear-clip').onclick = () => {
             state.projectItem = null;
-            state.transcript = null;
             renderClipInfo();
             updateStartButton();
         };
-
         document.getElementById('btn-start').onclick = startExtraction;
         document.getElementById('btn-insert').onclick = insertSelectedClips;
         document.getElementById('btn-select-all').onclick = () => {
             document.querySelectorAll('#results-list input[type="checkbox"]').forEach(c => c.checked = true);
         };
-
         document.getElementById('prompt').addEventListener('input', updateStartButton);
-    }
-
-    function handleDrop(e) {
-        // CEP não passa FileList real do Premiere; usa o selecionado no Project
-        cs.evalScript('CC.getSelectedProjectItem()', handleHostResult);
     }
 
     function handleHostResult(res) {
@@ -188,34 +167,109 @@
 
     function renderClipInfo() {
         const info = document.getElementById('clip-info');
-        const dropzone = document.getElementById('dropzone');
+        const btn = document.getElementById('btn-select-clip');
         if (!state.projectItem) {
             info.classList.add('hidden');
-            dropzone.classList.remove('hidden');
+            btn.classList.remove('hidden');
             return;
         }
+        btn.classList.add('hidden');
         info.classList.remove('hidden');
-        dropzone.classList.add('hidden');
         document.getElementById('clip-name').textContent = state.projectItem.name;
         const dur = state.projectItem.durationSeconds || 0;
         const mins = Math.floor(dur / 60);
         const secs = Math.floor(dur % 60);
-        document.getElementById('clip-meta').textContent = `${mins}:${secs.toString().padStart(2, '0')} · ${state.projectItem.path || ''}`;
+        document.getElementById('clip-meta').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // ==================== TRANSCRIPT ====================
+    function wireTranscript() {
+        const dz = document.getElementById('dropzone-tr');
+        const file = document.getElementById('file-tr');
+
+        dz.addEventListener('click', () => file.click());
+        dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+        dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+        dz.addEventListener('drop', e => {
+            e.preventDefault();
+            dz.classList.remove('dragover');
+            const f = e.dataTransfer.files[0];
+            if (f) readTranscriptFile(f);
+        });
+        file.addEventListener('change', e => {
+            if (e.target.files[0]) readTranscriptFile(e.target.files[0]);
+        });
+
+        document.getElementById('btn-use-paste').onclick = () => {
+            const text = document.getElementById('paste-tr').value;
+            if (!text || text.length < 20) return toast('Cole pelo menos algumas frases', 'warn');
+            processTranscript(text, 'texto colado');
+        };
+
+        document.getElementById('btn-clear-tr').onclick = () => {
+            state.transcript = null;
+            state.transcriptMeta = null;
+            document.getElementById('tr-info').classList.add('hidden');
+            document.getElementById('dropzone-tr').classList.remove('hidden');
+            document.querySelector('.paste-details').classList.remove('hidden');
+            document.getElementById('paste-tr').value = '';
+            document.getElementById('file-tr').value = '';
+            updateStartButton();
+        };
+    }
+
+    function readTranscriptFile(file) {
+        const reader = new FileReader();
+        reader.onload = e => processTranscript(e.target.result, file.name);
+        reader.onerror = () => toast('Erro ao ler arquivo', 'error');
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    function processTranscript(content, sourceName) {
+        try {
+            const dur = state.projectItem?.durationSeconds || null;
+            const result = TranscriptParser.parse(content, { durationSeconds: dur });
+            if (!result.text || result.segments < 2) {
+                return toast('Transcrição inválida — não foi possível extrair segmentos', 'error');
+            }
+            state.transcript = result.text;
+            state.transcriptMeta = { ...result, sourceName };
+            renderTranscriptInfo();
+            updateStartButton();
+            toast(`Transcrição carregada (${result.segments} segmentos, formato ${result.format})`, 'success');
+        } catch (e) {
+            toast('Erro ao processar: ' + e.message, 'error');
+        }
+    }
+
+    function renderTranscriptInfo() {
+        const info = document.getElementById('tr-info');
+        const dz = document.getElementById('dropzone-tr');
+        const paste = document.querySelector('.paste-details');
+        info.classList.remove('hidden');
+        dz.classList.add('hidden');
+        paste.classList.add('hidden');
+        document.getElementById('tr-meta').textContent =
+            `${state.transcriptMeta.sourceName} · ${state.transcriptMeta.format} · ${state.transcriptMeta.segments} linhas`;
     }
 
     function updateStartButton() {
         const hasPrompt = document.getElementById('prompt').value.trim().length >= 10;
         const hasClip = !!state.projectItem;
+        const hasTranscript = !!state.transcript;
         const hasProvider = !!state.providerId && !!Storage.getProviders()[state.providerId]?.apiKey;
         const btn = document.getElementById('btn-start');
-        btn.disabled = !(hasPrompt && hasClip && hasProvider);
-        if (!hasProvider) btn.querySelector('.btn-label').textContent = 'Configure um provider nas settings';
-        else if (!hasClip) btn.querySelector('.btn-label').textContent = 'Selecione um vídeo';
-        else if (!hasPrompt) btn.querySelector('.btn-label').textContent = 'Escreva o briefing';
-        else btn.querySelector('.btn-label').textContent = 'Iniciar extração';
+        btn.disabled = !(hasPrompt && hasClip && hasTranscript && hasProvider);
+
+        let label = 'Iniciar extração';
+        if (!hasProvider) label = 'Configure um provider em ⚙';
+        else if (!hasClip) label = 'Passo 1: selecione o vídeo';
+        else if (!hasTranscript) label = 'Passo 2: carregue a transcrição';
+        else if (!hasPrompt) label = 'Passo 3: escreva o briefing';
+        btn.querySelector('.btn-label').textContent = label;
     }
 
-    // ==================== EXTRACTION FLOW ====================
+    // ==================== EXTRACTION ====================
     async function startExtraction() {
         const prompt = document.getElementById('prompt').value.trim();
         const mode = document.querySelector('input[name="mode"]:checked').value;
@@ -225,20 +279,10 @@
 
         if (durMin >= durMax) return toast('Duração mínima deve ser menor que máxima', 'warn');
 
-        showProgress(true, 'Lendo transcrição do Premiere…', 15);
-
+        showProgress(true, 'Enviando para IA…', 30);
         try {
-            // 1. Obter transcrição via host script
-            const transcriptResult = await evalHost(`CC.getTranscript(${JSON.stringify(state.projectItem.nodeId)})`);
-            if (!transcriptResult.ok) throw new Error(transcriptResult.error || 'Transcrição não disponível. Use Window > Text > Transcript > Transcrever no Premiere primeiro.');
-            state.transcript = transcriptResult.transcript;
-
-            showProgress(true, 'Enviando para IA…', 45);
-
-            // 2. Chamar provider
             const provider = Providers.get(state.providerId);
             const providerConfig = Storage.getProviders()[state.providerId];
-
             const result = await provider.extractClips({
                 apiKey: providerConfig.apiKey,
                 model: state.model,
@@ -246,7 +290,6 @@
                 brief: prompt,
                 mode, durMin, durMax, count
             });
-
             state.results = { ...result, mode };
             showProgress(true, 'Pronto!', 100);
             setTimeout(() => {
@@ -264,15 +307,10 @@
         const list = document.getElementById('results-list');
         const results = document.getElementById('results');
         list.innerHTML = '';
-
         if (state.results.mode === 'compilation') {
-            (state.results.variations || []).forEach((v, idx) => {
-                list.appendChild(renderVariationCard(v, idx));
-            });
+            (state.results.variations || []).forEach((v, idx) => list.appendChild(renderVariationCard(v, idx)));
         } else {
-            (state.results.clips || []).forEach((c, idx) => {
-                list.appendChild(renderClipCard(c, idx));
-            });
+            (state.results.clips || []).forEach((c, idx) => list.appendChild(renderClipCard(c, idx)));
         }
         results.classList.remove('hidden');
     }
@@ -310,7 +348,6 @@
     async function insertSelectedClips() {
         const checked = Array.from(document.querySelectorAll('#results-list input[type="checkbox"]:checked'));
         if (!checked.length) return toast('Selecione pelo menos um trecho', 'warn');
-
         const newSequence = document.getElementById('new-sequence').checked;
         const payload = {
             mode: state.results.mode,
@@ -318,21 +355,16 @@
             newSequence,
             items: []
         };
-
         checked.forEach(cb => {
             const idx = parseInt(cb.dataset.idx, 10);
-            if (state.results.mode === 'compilation') {
-                payload.items.push(state.results.variations[idx]);
-            } else {
-                payload.items.push(state.results.clips[idx]);
-            }
+            if (state.results.mode === 'compilation') payload.items.push(state.results.variations[idx]);
+            else payload.items.push(state.results.clips[idx]);
         });
-
         showProgress(true, 'Inserindo na timeline…', 70);
         try {
             const res = await evalHost(`CC.insertClips(${JSON.stringify(JSON.stringify(payload))})`);
             showProgress(false);
-            if (res.ok) toast(`${res.inserted} trecho(s) inseridos com sucesso`, 'success');
+            if (res.ok) toast(`${res.inserted} trecho(s) inseridos`, 'success');
             else toast('Falha: ' + (res.error || 'erro desconhecido'), 'error');
         } catch (e) {
             showProgress(false);
@@ -351,12 +383,10 @@
             refreshTemplatesUI();
             toast(`Template "${name}" salvo`, 'success');
         };
-
         document.getElementById('btn-load-template').onclick = () => {
             document.getElementById('modal-load').classList.remove('hidden');
             refreshTemplatesUI();
         };
-
         document.getElementById('btn-create-template').onclick = () => {
             const name = document.getElementById('tpl-name').value.trim();
             const content = document.getElementById('tpl-content').value.trim();
@@ -373,9 +403,7 @@
         const settingsList = document.getElementById('templates-list');
         const modalList = document.getElementById('modal-templates-list');
         [settingsList, modalList].forEach(l => l.innerHTML = '');
-
         Templates.all().forEach(tpl => {
-            // Settings list (with edit/delete)
             const itemSettings = document.createElement('div');
             itemSettings.className = 'template-item';
             itemSettings.innerHTML = `
@@ -395,7 +423,6 @@
             };
             settingsList.appendChild(itemSettings);
 
-            // Modal list (click to load)
             const itemModal = document.createElement('div');
             itemModal.className = 'template-item';
             itemModal.innerHTML = `

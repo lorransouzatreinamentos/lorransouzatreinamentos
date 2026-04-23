@@ -1,4 +1,4 @@
-/* Claudio Cuts — Dark theme inspirado em Premiere Pro */
+/* FASTVIDEO — Dark theme inspirado em Premiere Pro */
 :root {
     --bg-0: #1a1a1a;
     --bg-1: #232323;
@@ -659,6 +659,238 @@ select {
 .toast.success { border-color: var(--success); }
 .toast.error { border-color: var(--danger); }
 .toast.warn { border-color: var(--warn); }
+
+/* Step sections */
+.step-section {
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.step-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.step-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.step-hint {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-left: auto;
+}
+
+.step-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+}
+
+/* Dropzone small variant */
+.dropzone-sm {
+    padding: 16px 12px;
+}
+
+.dropzone-sm .dropzone-icon {
+    font-size: 22px;
+    margin-bottom: 4px;
+}
+
+.dropzone-sm .dropzone-title {
+    font-size: 13px;
+}
+
+.dropzone-sm .dropzone-hint {
+    font-size: 11px;
+}
+
+/* Transcript info */
+.tr-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(76, 175, 80, 0.1);
+    border: 1px solid var(--success);
+    border-radius: var(--radius-sm);
+}
+
+.tr-badge {
+    color: var(--success);
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.tr-meta {
+    flex: 1;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: Monaco, Consolas, monospace;
+}
+
+/* Paste details */
+.paste-details {
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    background: var(--bg-0);
+}
+
+.paste-details summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 2px 0;
+}
+
+.paste-details summary:hover {
+    color: var(--accent);
+}
+
+.paste-details textarea {
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+/* Manual */
+.topbar-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.manual-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.manual-step {
+    display: flex;
+    gap: 12px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+}
+
+.manual-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.manual-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.manual-content h3 {
+    font-size: 14px;
+    margin-bottom: 8px;
+    color: var(--accent);
+}
+
+.manual-content p {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text);
+    margin-bottom: 8px;
+}
+
+.manual-content ol, .manual-content ul {
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--text-muted);
+    padding-left: 18px;
+    margin-bottom: 8px;
+}
+
+.manual-content li strong {
+    color: var(--text);
+}
+
+.manual-tip {
+    background: var(--accent-dim);
+    border-left: 3px solid var(--accent);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+    margin-top: 8px;
+}
+
+.manual-troubleshooting {
+    background: var(--bg-1);
+    border: 1px solid var(--warn);
+    border-radius: var(--radius);
+    padding: 14px;
+}
+
+.manual-troubleshooting h3 {
+    color: var(--warn);
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.trouble-item {
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.trouble-item:last-child {
+    border-bottom: none;
+}
+
+.trouble-item strong {
+    display: block;
+    color: var(--text);
+    margin-bottom: 2px;
+}
+
+.trouble-item span {
+    color: var(--text-muted);
+}
+
+.manual-footer {
+    text-align: center;
+    padding: 12px;
+    color: var(--text-muted);
+    font-size: 11px;
+}
 
 /* Utils */
 .hidden { display: none !important; }

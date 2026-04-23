@@ -1,122 +1,132 @@
 ================================================================================
-                      FASTVIDEO — INSTRUÇÕES DE INSTALAÇÃO
+                      FASTVIDEO — INSTRUÇÕES DE USO
                        Extensão para Adobe Premiere Pro
+                              Versão 1.1.0
 ================================================================================
 
-O QUE É
--------
-Extensão que extrai os melhores trechos de um vídeo usando IA (Claude, OpenAI
-ou Gemini) e insere automaticamente na timeline do Premiere Pro.
+NOVIDADE v1.1
+-------------
+Agora você só precisa EXPORTAR a transcrição do Premiere (formato TXT ou JSON
+do próprio painel) e ARRASTAR na extensão. Sem precisar salvar em lugar
+específico. Muito mais simples.
 
 
 ================================================================================
-PASSO 1 — HABILITAR MODO DEBUG DO PREMIERE
+PASSO 1 — HABILITAR MODO DEBUG DO PREMIERE (1x só)
 ================================================================================
 
-O Premiere só carrega extensões não-assinadas se o modo debug estiver ativado.
-
->> MAC (Terminal):
+MAC (Terminal):
 
     defaults write com.adobe.CSXS.11 PlayerDebugMode 1
     defaults write com.adobe.CSXS.10 PlayerDebugMode 1
     defaults write com.adobe.CSXS.9 PlayerDebugMode 1
 
->> WINDOWS (PowerShell como Admin):
+WINDOWS (PowerShell como Admin):
 
     reg add HKCU\Software\Adobe\CSXS.11 /v PlayerDebugMode /t REG_SZ /d 1 /f
     reg add HKCU\Software\Adobe\CSXS.10 /v PlayerDebugMode /t REG_SZ /d 1 /f
     reg add HKCU\Software\Adobe\CSXS.9 /v PlayerDebugMode /t REG_SZ /d 1 /f
 
-** FECHE E ABRA O PREMIERE depois de rodar esses comandos. **
+** FECHE E ABRA O PREMIERE depois. **
 
 
 ================================================================================
-PASSO 2 — BAIXAR A EXTENSÃO
+PASSO 2 — INSTALAR
 ================================================================================
 
-Baixe o arquivo:
-
-    premiere-extension/build/FastVideo.zip
-
-Do repositório:
-
-    https://github.com/lorransouzatreinamentos/lorransouzatreinamentos
-
-Ou pelo terminal:
-
-    git clone https://github.com/lorransouzatreinamentos/lorransouzatreinamentos
-    cd lorransouzatreinamentos
-    git checkout claude/premiere-video-extraction-5rwlQ
-
-
-================================================================================
-PASSO 3 — INSTALAR
-================================================================================
-
->> MAC:
+MAC:
 
     mkdir -p ~/Library/Application\ Support/Adobe/CEP/extensions/FastVideo
     unzip FastVideo.zip -d ~/Library/Application\ Support/Adobe/CEP/extensions/FastVideo
 
->> WINDOWS (PowerShell):
+WINDOWS (PowerShell):
 
     Expand-Archive FastVideo.zip -DestinationPath "$env:APPDATA\Adobe\CEP\extensions\FastVideo"
 
 
 ================================================================================
-PASSO 4 — ABRIR NO PREMIERE
+PASSO 3 — ABRIR NO PREMIERE
 ================================================================================
 
-1. Abra o Adobe Premiere Pro
-2. Menu:    Window  >  Extensions  >  FASTVIDEO
-3. O painel aparece no lado direito — arraste para onde preferir
+Abra o Adobe Premiere Pro.
+Menu:    Window  >  Extensions  >  FASTVIDEO
+
+DENTRO DA EXTENSÃO existe um botão "❔" no topo que abre o MANUAL COMPLETO
+com tutorial passo-a-passo. Use ele se tiver dúvida em qualquer momento.
 
 
 ================================================================================
-PASSO 5 — CONFIGURAR SUA API DE IA
+PASSO 4 — CONFIGURAR API DE IA (1x só)
 ================================================================================
 
-Você precisa de pelo menos UMA API key de algum provider:
+Clique em ⚙ (engrenagem) no topo da extensão.
+Aba "Providers". Cole pelo menos UMA API key:
 
->> CLAUDE (Anthropic) — recomendado, mais inteligente:
+>> CLAUDE (recomendado):
    https://console.anthropic.com/settings/keys
 
->> OPENAI (GPT):
+>> OPENAI:
    https://platform.openai.com/api-keys
 
->> GEMINI (Google) — mais barato:
+>> GEMINI (mais barato):
    https://aistudio.google.com/app/apikey
 
-Na extensão:
-
-1. Clique no ícone de engrenagem (canto superior direito)
-2. Aba "Providers"
-3. Cole a API key do provider escolhido
-4. Selecione o modelo (Haiku = rápido, Sonnet = equilibrado, Opus = máxima qualidade)
-5. Clique em "Testar conexão"  →  deve mostrar "Conexão OK"
-6. Clique em "Salvar chaves"
+Clique "Testar conexão" → "Salvar chaves".
 
 
 ================================================================================
-PASSO 6 — COMO USAR
+PASSO 5 — GERAR TRANSCRIÇÃO NO PREMIERE
 ================================================================================
 
->> PREPARAÇÃO DO VÍDEO:
+Esta é a parte que confundia todo mundo. Agora ficou claro:
 
-1. Importe o vídeo no Premiere (biblioteca do projeto)
-2. Gere a transcrição:
-      Window  >  Text  >  Transcript  >  Transcrever
-3. Exporte a transcrição como SRT:
-      Clique direito na transcrição  >  Exportar  >  SRT
-      Salve com o MESMO NOME do vídeo (ex: video.mp4 → video.srt)
-      na mesma pasta do vídeo
+1. Importe o vídeo no Premiere (Project panel)
 
->> EXTRAÇÃO:
+2. Abra o painel Text:
+      Window  >  Text
 
-1. Na extensão, clique na área "Arraste o vídeo aqui"
-   (vai pegar o clipe selecionado no painel Project)
+3. Clique na aba "Transcript" (dentro do painel Text)
 
-2. Escreva o briefing. Exemplos:
+4. Clique em "Transcrever sequência"  OU  "Transcribe sequence"
+
+5. Escolha:
+      - Idioma: Português (ou o idioma do seu vídeo)
+      - Speaker labeling: opcional
+      - Clique em "Transcribe"
+
+6. Aguarde 1-3 minutos (offline, grátis, nativo do Premiere)
+
+7. EXPORTAR:
+      No painel Transcript, clique no ícone "⋯" (três pontos)
+      No menu, escolha:
+         "Exportar transcrição"  >  "Arquivo de texto (.txt)"
+      (ou JSON se preferir, qualquer um dos dois funciona)
+
+8. Salve em qualquer pasta (Desktop é ótimo)
+
+
+================================================================================
+PASSO 6 — USAR A FASTVIDEO
+================================================================================
+
+Na extensão você verá 4 passos numerados:
+
+PASSO 1 — Selecione o vídeo:
+   No Project panel do Premiere, CLIQUE no vídeo para selecioná-lo.
+   Na extensão, clique em "Usar clipe selecionado".
+   Aparece o nome do vídeo e duração.
+
+PASSO 2 — Carregue a transcrição:
+   Arraste o arquivo .txt (ou .json) que você exportou no Passo 5
+   para dentro da área "Arraste o arquivo aqui".
+
+   ALTERNATIVA: clique em "Ou cole o texto da transcrição" e cole
+   o texto direto do painel do Premiere (Ctrl+A, Ctrl+C lá, Ctrl+V aqui).
+
+   Aparece um badge verde ✓ confirmando que a transcrição foi processada.
+
+PASSO 3 — Escreva o briefing:
+   Descreva o que você quer que a IA encontre. Exemplos:
 
    → "Quero trechos com ganchos fortes sobre produtividade, para virar
       Reels de Instagram."
@@ -125,117 +135,106 @@ PASSO 6 — COMO USAR
 
    → "Encontre insights sobre vendas B2B com dados ou cases."
 
-3. Escolha o MODO:
+   Dica: clique em "📂 Carregar" para usar um template pronto.
 
-   [•] TRECHO CONTÍNUO
-       Uma janela fechada do vídeo, sem cortes internos.
-       Exemplo: dos 1:20 aos 2:35 (75 segundos contínuos).
+PASSO 4 — Configure:
+   Modo:
+      [•] TRECHO CONTÍNUO   — uma janela fechada do vídeo (1 corte só)
+      [ ] COMPILAÇÃO        — costura pedaços de momentos diferentes
 
-   [ ] COMPILAÇÃO MULTI-CUT
-       A IA costura pedaços de momentos diferentes.
-       Exemplo: hook dos 0:15 + desenvolvimento dos 3:40 + CTA dos 8:12.
+   Duração mín/máx: em segundos (padrão 30-90)
 
-4. Ajuste duração (mín/máx em segundos) e quantidade de variações
+   Variações: quantas opções a IA deve gerar (padrão 3)
 
-5. Selecione o modelo de IA (dropdown)
+   Modelo: Claude Sonnet 4.6 é o recomendado
 
-6. Clique em "INICIAR EXTRAÇÃO"
-   Aguarde 30 segundos a 3 minutos dependendo do tamanho do vídeo
+Clique em "INICIAR EXTRAÇÃO".
 
-7. Revise os trechos sugeridos:
-   - Cada um mostra timestamp, duração e motivo
-   - Desmarque os que você não quer
-
-8. Marque "Criar nova sequência" (recomendado na primeira vez)
-
-9. Clique em "ADICIONAR À TIMELINE"
-   → Os trechos aparecem cortados e sincronizados na timeline
+Aguarde 20s - 2min. Revise os trechos sugeridos, desmarque os indesejados,
+clique em "ADICIONAR À TIMELINE". Os cortes aparecem prontos na timeline.
 
 
 ================================================================================
-TEMPLATES DE BRIEFING (reutilize prompts)
+FLUXO RÁPIDO (depois da 1ª vez)
 ================================================================================
 
-SALVAR UM TEMPLATE:
-1. Escreva o briefing na tela principal
-2. Clique em "💾 Salvar"
-3. Dê um nome (ex: "Pegada emocional")
+1. Premiere: gerar transcrição + exportar TXT
+2. Extensão: selecionar clipe → arrastar TXT → briefing → iniciar
+3. Revisar → adicionar à timeline
 
-CARREGAR UM TEMPLATE:
-1. Clique em "📂 Carregar"
-2. Escolha o template da lista
+Tempo total: ~5 minutos (incluindo transcrição)
 
-Templates prontos já incluídos:
-  - Pegada emocional
-  - Financeiro / Empresarial
-  - Reels educacionais
 
-GERENCIAR TEMPLATES:
-Engrenagem  >  aba Templates  →  criar, editar, excluir
+================================================================================
+MANUAL DENTRO DA EXTENSÃO
+================================================================================
+
+Clique no botão ❔ no topo da extensão a qualquer momento para abrir o
+manual completo com:
+
+- Passo a passo detalhado de cada fase
+- Como configurar a API
+- Como gerar e exportar a transcrição no Premiere
+- Como usar os templates
+- Troubleshooting dos erros mais comuns
 
 
 ================================================================================
 PROBLEMAS COMUNS
 ================================================================================
 
->> "FASTVIDEO" não aparece no menu Extensions:
-   → Verifique se habilitou PlayerDebugMode (Passo 1)
-   → Feche COMPLETAMENTE o Premiere e abra de novo
-   → Confirme que a pasta está no local certo
+>> "FASTVIDEO" não aparece em Window > Extensions:
+   → Habilitou PlayerDebugMode? (Passo 1)
+   → Fechou E abriu o Premiere depois?
 
->> "Transcrição não encontrada":
-   → Você precisa GERAR a transcrição no Premiere antes
-   → Window > Text > Transcript > Transcrever
-   → Depois exportar como SRT ao lado do vídeo
+>> "Transcrição inválida":
+   → Tente exportar do Premiere como JSON em vez de TXT
+   → Ou cole o texto direto usando a opção "Ou cole o texto"
+   → A extensão aceita qualquer formato: TXT, JSON, SRT, VTT, CSV
 
->> "Falha na extração" ou "API error":
-   → Teste a conexão nas Settings
+>> "API error":
+   → Teste a conexão nas Settings (⚙)
    → Verifique se tem crédito no provider
-   → Tente outro modelo (Sonnet 4.6 geralmente funciona)
+   → Tente trocar o modelo
 
 >> "Sem sequência ativa":
    → Marque "Criar nova sequência" antes de inserir
-   → Ou crie manualmente uma sequência vazia primeiro
+   → Ou crie uma sequência vazia no Premiere primeiro
 
->> Inserção insere mas não corta direito:
-   → A IA retorna timestamps em segundos — qualidade do corte
-     depende da precisão da transcrição. Use Sonnet 4.6 ou Opus 4.7
-     para maior precisão no modo compilação.
+>> Cortes cortam no meio da frase:
+   → Use Claude Sonnet 4.6 ou Opus 4.7 (maior precisão)
+   → No modo compilação, cortes dependem da qualidade da transcrição
 
 
 ================================================================================
-CUSTOS ESTIMADOS (por vídeo de 10 minutos)
+CUSTOS (por vídeo de 10min)
 ================================================================================
 
-  Claude Haiku 4.5    →  ~$0,002   (mais barato e rápido)
-  Claude Sonnet 4.6   →  ~$0,02    (equilibrado, RECOMENDADO)
-  Claude Opus 4.7     →  ~$0,15    (máxima qualidade)
-  GPT-4o mini         →  ~$0,003
-  GPT-4o              →  ~$0,05
-  Gemini 2.5 Flash    →  ~$0,001   (mais barato)
-  Gemini 2.5 Pro      →  ~$0,03
+  Claude Haiku 4.5    ≈ $0,002  (mais barato e rápido)
+  Claude Sonnet 4.6   ≈ $0,02   (equilibrado, RECOMENDADO)
+  Claude Opus 4.7     ≈ $0,15   (máxima qualidade)
+  GPT-4o mini         ≈ $0,003
+  Gemini 2.5 Flash    ≈ $0,001  (mais barato absoluto)
 
 
 ================================================================================
 SEGURANÇA DAS API KEYS
 ================================================================================
 
-As API keys ficam APENAS na sua máquina (localStorage do navegador embutido
-do Premiere), com ofuscação XOR+base64.
-
-NUNCA são enviadas para servidores terceiros além do próprio provider
-que você escolheu (Anthropic / OpenAI / Google).
+Ficam APENAS na sua máquina (localStorage ofuscado). Nunca enviadas
+para servidores terceiros além do próprio provider escolhido.
 
 
 ================================================================================
-SUPORTE E CONTATO
+SUPORTE
 ================================================================================
 
-Documentação completa:  premiere-extension/README.md
-Repositório:            https://github.com/lorransouzatreinamentos/lorransouzatreinamentos
-Branch:                 claude/premiere-video-extraction-5rwlQ
+Manual in-app:         clique em ❔ no topo da extensão
+README completo:       premiere-extension/README.md
+Repositório:           github.com/lorransouzatreinamentos/lorransouzatreinamentos
+Branch:                claude/premiere-video-extraction-5rwlQ
 
 
 ================================================================================
-Construído com Segunda-feira Framework v7.0
+                    Segunda-feira Framework v7.0
 ================================================================================

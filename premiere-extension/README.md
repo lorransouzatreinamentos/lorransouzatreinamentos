@@ -8,13 +8,17 @@ Extensão que extrai automaticamente os melhores trechos de um vídeo usando IA 
 
 ## O que faz
 
-1. **Você arrasta** um vídeo da biblioteca do Premiere para a extensão
-2. **Escreve um briefing** (ex: "quero trechos com ganchos fortes sobre produtividade")
-3. **Escolhe o modo:**
+1. **Seleciona** o vídeo do Project panel do Premiere
+2. **Carrega** a transcrição (TXT/JSON exportado do Premiere — só arrastar!)
+3. **Escreve um briefing** (ex: "quero trechos com ganchos fortes sobre produtividade")
+4. **Escolhe o modo:**
    - **Trecho contínuo:** encontra janelas fechadas (1 corte só)
    - **Compilação multi-cut:** monta vídeo costurando pedaços de momentos diferentes
-4. **A IA processa** a transcrição nativa do Premiere e devolve os melhores trechos
-5. **1 clique** insere tudo na timeline como subclipes não-destrutivos
+5. **A IA processa** e devolve os melhores trechos
+6. **1 clique** insere tudo na timeline como subclipes não-destrutivos
+
+> 🆕 **v1.1:** fluxo simplificado com upload direto do TXT/JSON da transcrição
+> do Premiere. Sem precisar salvar em pasta específica. Manual in-app incluído (❔).
 
 ## Features
 
@@ -81,18 +85,29 @@ Clique em **Testar conexão** para validar e depois **Salvar chaves**.
 
 ### Passo a passo
 
-1. No Premiere, **importe o vídeo** para a biblioteca do projeto (Project panel)
-2. Gere a transcrição: **Window > Text > Transcript > Transcrever sequência/clipe**
-3. Exporte a transcrição como SRT ao lado do arquivo de vídeo (mesmo nome base)
-   - Alternativa: a extensão tenta ler do XMP embed automaticamente
+1. **Importe o vídeo** no Project panel do Premiere
+2. **Gere a transcrição:** `Window > Text > Transcript > Transcrever sequência`
+3. **Exporte a transcrição:** no painel Transcript, clique em `⋯` > **Exportar transcrição** > escolha **TXT** ou **JSON** (qualquer um dos dois funciona). Salve em qualquer pasta.
 4. Na extensão FASTVIDEO:
-   - **Clique na dropzone** (ou arraste o clipe do Project)
-   - Escreva o **briefing**
-   - Escolha **modo** e **duração**
-   - Selecione o **modelo de IA**
+   - **Passo 1:** selecione o vídeo no Project panel, clique em "Usar clipe selecionado"
+   - **Passo 2:** **arraste o arquivo TXT/JSON** da transcrição para a área indicada (ou cole o texto)
+   - **Passo 3:** escreva o briefing
+   - **Passo 4:** configure modo, duração e modelo de IA
    - Clique **Iniciar extração**
 5. Revise os trechos sugeridos, desmarque os indesejados
 6. Clique **Adicionar à timeline**
+
+> Dentro da extensão existe um botão **❔ Manual** no topo, com tutorial passo-a-passo completo.
+
+### Formatos de transcrição suportados
+
+A extensão detecta automaticamente o formato:
+- **TXT do Premiere** (com timestamps `Speaker N  HH:MM:SS`)
+- **JSON do Premiere** (export JSON do painel Transcript)
+- **SRT** (legendas)
+- **VTT** (WebVTT)
+- **CSV** (start, end, text)
+- **TXT puro** (sem timestamps — estima timestamps por palavra)
 
 ### Templates de briefing
 
@@ -133,11 +148,11 @@ premiere-extension/
 │       ├── storage.js         # LocalStorage + ofuscação
 │       ├── providers.js       # Claude/OpenAI/Gemini
 │       ├── templates.js       # CRUD templates
+│       ├── transcript-parser.js # Parser multi-formato (TXT/JSON/SRT/VTT/CSV)
 │       └── main.js            # Controller principal
 ├── host/
 │   ├── json2.jsx              # JSON polyfill ES
-│   ├── index.jsx              # Entry ExtendScript
-│   ├── transcript.jsx         # Parser SRT/VTT/prtranscript/XMP
+│   ├── index.jsx              # Entry ExtendScript (selectItem + insertClips)
 │   └── timeline.jsx           # createSubClip + insertClip
 ├── build/
 │   └── package.sh             # Script empacotamento .zxp
@@ -151,10 +166,10 @@ premiere-extension/
 - Confirme que `PlayerDebugMode = 1` foi aplicado antes de abrir o Premiere
 - Reinicie o Premiere
 
-**"Transcrição não encontrada":**
-- Gere a transcrição no Premiere (Window > Text > Transcript)
-- Exporte como SRT com o mesmo nome base do vídeo
-- Exemplo: `video.mp4` → salve como `video.srt` na mesma pasta
+**"Transcrição inválida":**
+- Re-exporte do Premiere como TXT ou JSON (painel Transcript > ⋯ > Exportar)
+- Alternativa: cole o texto direto usando "Ou cole o texto da transcrição"
+- A extensão aceita TXT, JSON, SRT, VTT, CSV automaticamente
 
 **"Falha na extração / resposta inválida":**
 - Teste a conexão do provider nas Settings

@@ -12,19 +12,23 @@
                 <span class="logo-mark">◆</span>
                 <span class="logo-text">FASTVIDEO</span>
             </div>
-            <button id="btn-settings" class="icon-btn" title="Configurações">⚙</button>
+            <div class="topbar-actions">
+                <button id="btn-manual" class="icon-btn" title="Manual de uso">❔</button>
+                <button id="btn-settings" class="icon-btn" title="Configurações">⚙</button>
+            </div>
         </header>
 
         <!-- ============ MAIN VIEW ============ -->
         <main id="view-main" class="view active">
-            <section class="dropzone-section">
-                <div id="dropzone" class="dropzone">
-                    <div class="dropzone-inner">
-                        <div class="dropzone-icon">▼</div>
-                        <div class="dropzone-title">Arraste o vídeo aqui</div>
-                        <div class="dropzone-hint">ou clique para selecionar da biblioteca</div>
-                    </div>
+
+            <!-- Passo 1: vídeo -->
+            <section class="step-section">
+                <div class="step-header">
+                    <span class="step-num">1</span>
+                    <span class="step-title">Selecione o vídeo</span>
+                    <span class="step-hint">no painel Project do Premiere</span>
                 </div>
+                <button id="btn-select-clip" class="btn-secondary">Usar clipe selecionado</button>
                 <div id="clip-info" class="clip-info hidden">
                     <div class="clip-name" id="clip-name">—</div>
                     <div class="clip-meta" id="clip-meta">—</div>
@@ -32,19 +36,53 @@
                 </div>
             </section>
 
-            <section class="form-section">
-                <div class="field">
-                    <div class="field-header">
-                        <label for="prompt">Briefing (prompt)</label>
-                        <div class="field-actions">
-                            <button class="link-btn" id="btn-load-template">📂 Carregar</button>
-                            <button class="link-btn" id="btn-save-template">💾 Salvar</button>
-                        </div>
-                    </div>
-                    <textarea id="prompt" rows="4"
-                        placeholder="Ex: Quero trechos com ganchos fortes que falem sobre produtividade, para virar Reels de Instagram."></textarea>
+            <!-- Passo 2: transcrição -->
+            <section class="step-section">
+                <div class="step-header">
+                    <span class="step-num">2</span>
+                    <span class="step-title">Carregue a transcrição</span>
+                    <span class="step-hint">TXT, JSON, SRT, VTT, CSV</span>
                 </div>
+                <div id="dropzone-tr" class="dropzone dropzone-sm">
+                    <div class="dropzone-inner">
+                        <div class="dropzone-icon">📄</div>
+                        <div class="dropzone-title">Arraste o arquivo aqui</div>
+                        <div class="dropzone-hint">ou clique para selecionar</div>
+                    </div>
+                    <input type="file" id="file-tr" accept=".txt,.json,.srt,.vtt,.csv" hidden>
+                </div>
+                <details class="paste-details">
+                    <summary>Ou cole o texto da transcrição</summary>
+                    <textarea id="paste-tr" rows="4" placeholder="Cole o texto da transcrição do Premiere aqui..."></textarea>
+                    <button class="btn-secondary" id="btn-use-paste">Usar texto colado</button>
+                </details>
+                <div id="tr-info" class="tr-info hidden">
+                    <span class="tr-badge">✓ Transcrição carregada</span>
+                    <span class="tr-meta" id="tr-meta">—</span>
+                    <button class="link-btn" id="btn-clear-tr">Trocar</button>
+                </div>
+            </section>
 
+            <!-- Passo 3: briefing -->
+            <section class="step-section">
+                <div class="step-header">
+                    <span class="step-num">3</span>
+                    <span class="step-title">Briefing (prompt)</span>
+                    <div class="step-actions">
+                        <button class="link-btn" id="btn-load-template">📂 Carregar</button>
+                        <button class="link-btn" id="btn-save-template">💾 Salvar</button>
+                    </div>
+                </div>
+                <textarea id="prompt" rows="4"
+                    placeholder="Ex: Quero trechos com ganchos fortes que falem sobre produtividade, para virar Reels de Instagram."></textarea>
+            </section>
+
+            <!-- Passo 4: config -->
+            <section class="step-section">
+                <div class="step-header">
+                    <span class="step-num">4</span>
+                    <span class="step-title">Configurações</span>
+                </div>
                 <div class="field">
                     <label>Modo de extração</label>
                     <div class="radio-group">
@@ -64,7 +102,6 @@
                         </label>
                     </div>
                 </div>
-
                 <div class="field-row">
                     <div class="field half">
                         <label for="dur-min">Duração mín (s)</label>
@@ -75,12 +112,10 @@
                         <input type="number" id="dur-max" value="90" min="5" max="600">
                     </div>
                 </div>
-
                 <div class="field">
                     <label for="count">Quantidade de variações</label>
                     <input type="number" id="count" value="3" min="1" max="10">
                 </div>
-
                 <div class="field">
                     <label for="model-select">Modelo de IA</label>
                     <select id="model-select"></select>
@@ -93,13 +128,11 @@
                 </button>
             </section>
 
-            <!-- Progress -->
             <section id="progress" class="progress hidden">
                 <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
                 <div class="progress-label" id="progress-label">Processando…</div>
             </section>
 
-            <!-- Results -->
             <section id="results" class="results hidden">
                 <div class="results-header">
                     <h3>Trechos sugeridos</h3>
@@ -118,6 +151,115 @@
             <div id="toast" class="toast hidden"></div>
         </main>
 
+        <!-- ============ MANUAL VIEW ============ -->
+        <section id="view-manual" class="view">
+            <header class="view-header">
+                <button class="icon-btn" id="btn-back-manual">←</button>
+                <h2>Manual de uso</h2>
+            </header>
+
+            <div class="manual-body">
+                <div class="manual-step">
+                    <div class="manual-num">1</div>
+                    <div class="manual-content">
+                        <h3>Configure a API (1x só)</h3>
+                        <p>Clique no ⚙ no topo da extensão. Na aba <strong>Providers</strong>, cole pelo menos uma API key:</p>
+                        <ul>
+                            <li><strong>Claude</strong> (recomendado): console.anthropic.com/settings/keys</li>
+                            <li><strong>OpenAI</strong>: platform.openai.com/api-keys</li>
+                            <li><strong>Gemini</strong> (mais barato): aistudio.google.com/app/apikey</li>
+                        </ul>
+                        <p>Clique em <strong>Testar conexão</strong>, depois <strong>Salvar chaves</strong>.</p>
+                    </div>
+                </div>
+
+                <div class="manual-step">
+                    <div class="manual-num">2</div>
+                    <div class="manual-content">
+                        <h3>Gere a transcrição no Premiere</h3>
+                        <p>No Premiere Pro:</p>
+                        <ol>
+                            <li>Importe o vídeo no <strong>Project panel</strong></li>
+                            <li>Menu <strong>Window → Text</strong> (abre o painel Text)</li>
+                            <li>Na aba <strong>Transcript</strong>, clique em <strong>Transcrever sequência</strong></li>
+                            <li>Escolha o idioma e clique <strong>Transcrever</strong></li>
+                            <li>Aguarde o processamento (1-3 min)</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="manual-step">
+                    <div class="manual-num">3</div>
+                    <div class="manual-content">
+                        <h3>Exporte a transcrição</h3>
+                        <p>Ainda no painel Transcript do Premiere:</p>
+                        <ol>
+                            <li>Clique no ícone <strong>⋯</strong> (três pontos) no canto do painel</li>
+                            <li>Escolha <strong>Exportar transcrição</strong></li>
+                            <li>Selecione <strong>Texto (.txt)</strong> ou <strong>JSON (.json)</strong></li>
+                            <li>Salve em qualquer pasta (ex: Desktop)</li>
+                        </ol>
+                        <div class="manual-tip">
+                            💡 <strong>Dica:</strong> Qualquer formato funciona. A FASTVIDEO detecta automaticamente. TXT puro do Premiere é o mais simples.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="manual-step">
+                    <div class="manual-num">4</div>
+                    <div class="manual-content">
+                        <h3>Use a extensão</h3>
+                        <ol>
+                            <li><strong>Passo 1:</strong> Clique em "Usar clipe selecionado" com o vídeo selecionado no Project</li>
+                            <li><strong>Passo 2:</strong> Arraste o arquivo de transcrição (TXT/JSON) para a área indicada</li>
+                            <li><strong>Passo 3:</strong> Escreva seu briefing (o que você quer que a IA encontre)</li>
+                            <li><strong>Passo 4:</strong> Configure modo, duração e modelo de IA</li>
+                            <li>Clique <strong>Iniciar extração</strong></li>
+                            <li>Aguarde, revise os trechos, clique <strong>Adicionar à timeline</strong></li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="manual-step">
+                    <div class="manual-num">5</div>
+                    <div class="manual-content">
+                        <h3>Salve seus briefings favoritos</h3>
+                        <p>Depois de escrever um bom briefing, clique em <strong>💾 Salvar</strong>, dê um nome (ex: "Pegada emocional"). Da próxima vez, use <strong>📂 Carregar</strong>.</p>
+                        <p>Três templates já vêm prontos:</p>
+                        <ul>
+                            <li>Pegada emocional</li>
+                            <li>Financeiro / Empresarial</li>
+                            <li>Reels educacionais</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="manual-troubleshooting">
+                    <h3>⚠ Problemas comuns</h3>
+                    <div class="trouble-item">
+                        <strong>"Transcrição vazia ou inválida":</strong>
+                        <span>O arquivo pode estar corrompido. Re-exporte do Premiere como TXT.</span>
+                    </div>
+                    <div class="trouble-item">
+                        <strong>"Sem sequência ativa":</strong>
+                        <span>Marque "Criar nova sequência" antes de inserir na timeline.</span>
+                    </div>
+                    <div class="trouble-item">
+                        <strong>"API error" ao extrair:</strong>
+                        <span>Teste a conexão nas Settings. Verifique crédito no provider.</span>
+                    </div>
+                    <div class="trouble-item">
+                        <strong>Cortes cortam no meio da frase:</strong>
+                        <span>Use Sonnet 4.6 ou Opus 4.7 para maior precisão (especialmente modo compilação).</span>
+                    </div>
+                </div>
+
+                <div class="manual-footer">
+                    <p>📖 Documentação completa: README.md no repositório</p>
+                </div>
+            </div>
+        </section>
+
         <!-- ============ SETTINGS VIEW ============ -->
         <section id="view-settings" class="view">
             <header class="view-header">
@@ -132,7 +274,6 @@
                     <button class="tab-btn" data-tab="about">Sobre</button>
                 </div>
 
-                <!-- Tab Providers -->
                 <div class="tab-content active" data-tab="providers">
                     <div class="provider-card">
                         <div class="provider-head">
@@ -173,7 +314,6 @@
                     <p class="note">🔒 Chaves armazenadas localmente e criptografadas. Nunca enviadas para servidores externos além do próprio provider escolhido.</p>
                 </div>
 
-                <!-- Tab Templates -->
                 <div class="tab-content" data-tab="templates">
                     <p class="note">Templates salvos de briefing para reuso rápido.</p>
                     <div id="templates-list" class="templates-list"></div>
@@ -184,18 +324,17 @@
                     </div>
                 </div>
 
-                <!-- Tab About -->
                 <div class="tab-content" data-tab="about">
                     <div class="about">
                         <h3>FASTVIDEO</h3>
                         <p>Extensão para Adobe Premiere Pro que extrai os melhores trechos de vídeos usando IA.</p>
                         <ul>
-                            <li><strong>Transcrição:</strong> nativa do Premiere (Speech to Text)</li>
+                            <li><strong>Transcrição:</strong> carregue TXT/JSON do Premiere</li>
                             <li><strong>Providers:</strong> Claude, OpenAI, Gemini</li>
                             <li><strong>Modos:</strong> trecho contínuo ou compilação multi-cut</li>
                             <li><strong>Timeline:</strong> insere subclipes não-destrutivos</li>
                         </ul>
-                        <p class="muted">v1.0.0 — Segunda-feira Framework</p>
+                        <p class="muted">v1.1.0 — Segunda-feira Framework</p>
                     </div>
                 </div>
             </div>
@@ -213,6 +352,7 @@
 
     <script src="js/CSInterface.js"></script>
     <script src="js/storage.js"></script>
+    <script src="js/transcript-parser.js"></script>
     <script src="js/providers.js"></script>
     <script src="js/templates.js"></script>
     <script src="js/main.js"></script>
