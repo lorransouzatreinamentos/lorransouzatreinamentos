@@ -87,7 +87,7 @@ var Timeline = (function() {
                     var seqName = variation.label || ('Variacao_' + (v + 1));
                     seqName = seqName.replace(/[^\w\u00C0-\u017F]+/g, '_').slice(0, 60);
                     var vSeq = payload.newSequence || v > 0
-                        ? createSequence('CC_' + seqName, referenceItem)
+                        ? createSequence('FV_' + seqName, referenceItem)
                         : sequence;
                     var vOffset = 0;
                     for (var c = 0; c < (variation.clips || []).length; c++) {

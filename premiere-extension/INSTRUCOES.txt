@@ -1,5 +1,5 @@
 ================================================================================
-                    CLAUDIO CUTS — INSTRUÇÕES DE INSTALAÇÃO
+                      FASTVIDEO — INSTRUÇÕES DE INSTALAÇÃO
                        Extensão para Adobe Premiere Pro
 ================================================================================
 
@@ -36,7 +36,7 @@ PASSO 2 — BAIXAR A EXTENSÃO
 
 Baixe o arquivo:
 
-    premiere-extension/build/ClaudioCuts.zip
+    premiere-extension/build/FastVideo.zip
 
 Do repositório:
 
@@ -55,12 +55,12 @@ PASSO 3 — INSTALAR
 
 >> MAC:
 
-    mkdir -p ~/Library/Application\ Support/Adobe/CEP/extensions/ClaudioCuts
-    unzip ClaudioCuts.zip -d ~/Library/Application\ Support/Adobe/CEP/extensions/ClaudioCuts
+    mkdir -p ~/Library/Application\ Support/Adobe/CEP/extensions/FastVideo
+    unzip FastVideo.zip -d ~/Library/Application\ Support/Adobe/CEP/extensions/FastVideo
 
 >> WINDOWS (PowerShell):
 
-    Expand-Archive ClaudioCuts.zip -DestinationPath "$env:APPDATA\Adobe\CEP\extensions\ClaudioCuts"
+    Expand-Archive FastVideo.zip -DestinationPath "$env:APPDATA\Adobe\CEP\extensions\FastVideo"
 
 
 ================================================================================
@@ -68,7 +68,7 @@ PASSO 4 — ABRIR NO PREMIERE
 ================================================================================
 
 1. Abra o Adobe Premiere Pro
-2. Menu:    Window  >  Extensions  >  Claudio Cuts
+2. Menu:    Window  >  Extensions  >  FASTVIDEO
 3. O painel aparece no lado direito — arraste para onde preferir
 
 
@@ -178,7 +178,7 @@ Engrenagem  >  aba Templates  →  criar, editar, excluir
 PROBLEMAS COMUNS
 ================================================================================
 
->> "Claudio Cuts" não aparece no menu Extensions:
+>> "FASTVIDEO" não aparece no menu Extensions:
    → Verifique se habilitou PlayerDebugMode (Passo 1)
    → Feche COMPLETAMENTE o Premiere e abra de novo
    → Confirme que a pasta está no local certo

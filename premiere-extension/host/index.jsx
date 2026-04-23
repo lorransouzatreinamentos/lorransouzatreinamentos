@@ -1,5 +1,5 @@
 /**
- * Claudio Cuts — ExtendScript host (Premiere Pro).
+ * FASTVIDEO — ExtendScript host (Premiere Pro).
  * Todas as operações expostas ao painel via CC.*
  */
 // @include "./json2.jsx"
@@ -110,7 +110,7 @@ var CC = (function() {
                 if (!item) return fail('Vídeo não encontrado no projeto');
 
                 var sequence = payload.newSequence
-                    ? Timeline.createSequence('Claudio_Cuts_' + Date.now(), item)
+                    ? Timeline.createSequence('FASTVIDEO_' + Date.now(), item)
                     : app.project.activeSequence;
 
                 if (!sequence) return fail('Sem sequência ativa. Crie uma sequência ou marque "Criar nova sequência"');

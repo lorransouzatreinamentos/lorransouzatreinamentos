@@ -4,8 +4,8 @@
  * Para produção considerar OS keychain via Node (cep enable-nodejs).
  */
 (function() {
-    const NS = 'claudioCuts';
-    const SECRET_SALT = 'cc:v1:' + (navigator.userAgent || '').slice(0, 32);
+    const NS = 'fastvideo';
+    const SECRET_SALT = 'fv:v1:' + (navigator.userAgent || '').slice(0, 32);
 
     function xorCipher(text, key) {
         let out = '';

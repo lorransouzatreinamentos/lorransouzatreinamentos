@@ -1,4 +1,4 @@
-# Claudio Cuts — Extensão Adobe Premiere Pro
+# FASTVIDEO — Extensão Adobe Premiere Pro
 
 Extensão que extrai automaticamente os melhores trechos de um vídeo usando IA (Claude, GPT, Gemini) e insere diretamente na timeline do Premiere Pro.
 
@@ -51,21 +51,21 @@ Reinicie o Premiere após habilitar.
 
 Copie (ou faça symlink de) a pasta `premiere-extension/` para:
 
-**macOS:** `~/Library/Application Support/Adobe/CEP/extensions/ClaudioCuts/`
-**Windows:** `%APPDATA%\Adobe\CEP\extensions\ClaudioCuts\`
+**macOS:** `~/Library/Application Support/Adobe/CEP/extensions/FastVideo/`
+**Windows:** `%APPDATA%\Adobe\CEP\extensions\FastVideo\`
 
 ```bash
 # macOS
 mkdir -p ~/Library/Application\ Support/Adobe/CEP/extensions/
-cp -R premiere-extension ~/Library/Application\ Support/Adobe/CEP/extensions/ClaudioCuts
+cp -R premiere-extension ~/Library/Application\ Support/Adobe/CEP/extensions/FastVideo
 
 # Windows (PowerShell)
-Copy-Item -Recurse premiere-extension "$env:APPDATA\Adobe\CEP\extensions\ClaudioCuts"
+Copy-Item -Recurse premiere-extension "$env:APPDATA\Adobe\CEP\extensions\FastVideo"
 ```
 
 ### 3. Abrir no Premiere
 
-Abra o Premiere Pro → menu **Window > Extensions > Claudio Cuts**.
+Abra o Premiere Pro → menu **Window > Extensions > FASTVIDEO**.
 
 ### 4. Configurar providers
 
@@ -85,7 +85,7 @@ Clique em **Testar conexão** para validar e depois **Salvar chaves**.
 2. Gere a transcrição: **Window > Text > Transcript > Transcrever sequência/clipe**
 3. Exporte a transcrição como SRT ao lado do arquivo de vídeo (mesmo nome base)
    - Alternativa: a extensão tenta ler do XMP embed automaticamente
-4. Na extensão Claudio Cuts:
+4. Na extensão FASTVIDEO:
    - **Clique na dropzone** (ou arraste o clipe do Project)
    - Escreva o **briefing**
    - Escolha **modo** e **duração**
@@ -112,7 +112,7 @@ Para gerar um instalador `.zxp` distribuível:
 # Precisa do ZXPSignCmd da Adobe (baixar em https://github.com/Adobe-CEP/CEP-Resources)
 cd premiere-extension
 ./build/package.sh
-# Saída: build/ClaudioCuts.zxp
+# Saída: build/FastVideo.zxp
 ```
 
 Os usuários instalam o `.zxp` via **ZXP Installer** (UnifiedPluginInstallerAgent) ou **Anastasiy's Extension Manager**.

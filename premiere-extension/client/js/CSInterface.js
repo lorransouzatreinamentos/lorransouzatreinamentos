@@ -1,6 +1,6 @@
 /**
  * CSInterface — minimal shim for CEP host communication.
- * Based on Adobe's CEP 9+ public API surface. Only methods used by Claudio Cuts.
+ * Based on Adobe's CEP 9+ public API surface. Only methods used by FASTVIDEO.
  */
 function CSInterface() {}
 

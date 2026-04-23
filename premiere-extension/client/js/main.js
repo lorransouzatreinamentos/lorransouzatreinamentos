@@ -1,5 +1,5 @@
 /**
- * Claudio Cuts — main controller.
+ * FASTVIDEO — main controller.
  * Orquestra: dropzone → transcrição (Premiere) → provider IA → inserção timeline.
  */
 (function() {
