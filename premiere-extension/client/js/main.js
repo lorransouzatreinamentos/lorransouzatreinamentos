@@ -38,9 +38,11 @@
         refreshTemplatesUI();
         // Carrega clipes do Project em background para permitir alternativa
         setTimeout(loadClipsFromProject, 300);
+        // Garante estado inicial correto do botão
+        updateStartButton();
     }
 
-    // ==================== VIDEO DROP (v1.8) ====================
+    // ==================== VIDEO DROP (v1.10) ====================
     function wireVideoDrop() {
         if (!window.VideoLoader) {
             console.error('[FASTVIDEO] VideoLoader não carregou');
@@ -55,12 +57,18 @@
             fileInputEl: fi,
             onLoad: (videoFile) => {
                 console.log('[FASTVIDEO] Vídeo carregado:', videoFile);
+                state.projectItem = null; // drop do SO substitui clipe do Project
                 state.videoFile = videoFile;
                 renderVideoInfo();
                 updateStartButton();
                 toast(`✓ "${videoFile.name}" carregado`, 'success');
             },
             onError: (msg) => {
+                // Drop sem path local = possivelmente drag do Project Panel
+                if (msg && msg.indexOf('caminho local') >= 0) {
+                    useSelectedFromPremiere();
+                    return;
+                }
                 console.warn('[FASTVIDEO] VideoLoader error:', msg);
                 toast(msg, 'error');
             }
@@ -69,6 +77,9 @@
         const clearBtn = document.getElementById('btn-clear-video');
         if (clearBtn) clearBtn.onclick = clearVideo;
 
+        const clearXBtn = document.getElementById('btn-clear-video-x');
+        if (clearXBtn) clearXBtn.onclick = clearVideo;
+
         const reproBtn = document.getElementById('btn-reprocess-transcription');
         if (reproBtn) reproBtn.onclick = reprocessTranscription;
     }
@@ -76,7 +87,11 @@
     function renderVideoInfo() {
         const info = document.getElementById('video-info');
         const dz = document.getElementById('dropzone-video');
-        if (!state.videoFile) {
+        // Fonte unificada: arquivo do SO ou clipe do Project Panel
+        const source = state.videoFile || (state.projectItem
+            ? { name: state.projectItem.name, size: 0, durationSeconds: state.projectItem.durationSeconds, fromProjectPanel: true }
+            : null);
+        if (!source) {
             info?.classList.add('hidden');
             dz?.classList.remove('hidden');
             return;
@@ -86,10 +101,18 @@
         const nameEl = document.getElementById('video-name');
         const metaEl = document.getElementById('video-meta');
         const reproBtn = document.getElementById('btn-reprocess-transcription');
-        if (nameEl) nameEl.textContent = state.videoFile.name;
+        if (nameEl) nameEl.textContent = source.name;
         if (metaEl) {
-            const sizeStr = window.VideoLoader?.formatSize(state.videoFile.size) || '';
-            const parts = [sizeStr];
+            const parts = [];
+            if (source.fromProjectPanel) {
+                const dur = source.durationSeconds || 0;
+                const mins = Math.floor(dur / 60);
+                const secs = Math.floor(dur % 60);
+                parts.push(`📎 Project Panel · ${mins}:${secs.toString().padStart(2, '0')}`);
+            } else {
+                const sizeStr = window.VideoLoader?.formatSize(source.size) || '';
+                if (sizeStr) parts.push(sizeStr);
+            }
             if (state.transcriptMeta?.format === 'whisper') {
                 parts.push(state.transcriptMeta.fromCache
                     ? `📁 cache · ${state.transcriptMeta.count} seg`
@@ -97,7 +120,6 @@
             }
             metaEl.innerHTML = parts.map(p => escapeHtml(p)).join(' · ');
         }
-        // Mostra botão "Reprocessar" apenas se temos transcrição whisper em cache
         if (reproBtn) {
             reproBtn.style.display = state.transcriptMeta?.format === 'whisper' ? '' : 'none';
         }
@@ -105,6 +127,9 @@
 
     function clearVideo() {
         state.videoFile = null;
+        state.projectItem = null;
+        state.transcriptSegments = null;
+        state.transcriptMeta = null;
         renderVideoInfo();
         updateStartButton();
     }
@@ -151,48 +176,50 @@
         document.getElementById('view-' + id).classList.add('active');
     }
 
-    // ==================== CLIP PICKER (bug #1 fix + drag-drop v1.5) ====================
+    // ==================== CLIP PICKER (v1.10) ====================
     function wireClipPicker() {
         const refreshBtn = document.getElementById('btn-refresh-clips');
-        refreshBtn.onclick = async () => {
+        if (refreshBtn) refreshBtn.onclick = async () => {
             refreshBtn.classList.add('spinning');
             await loadClipsFromProject();
             setTimeout(() => refreshBtn.classList.remove('spinning'), 600);
         };
 
-        document.getElementById('btn-use-selected').onclick = useSelectedFromPremiere;
-        document.getElementById('clip-dropdown').onchange = (e) => {
+        const useBtn = document.getElementById('btn-use-selected');
+        if (useBtn) useBtn.onclick = useSelectedFromPremiere;
+
+        const dd = document.getElementById('clip-dropdown');
+        if (dd) dd.onchange = (e) => {
             const nodeId = e.target.value;
             if (!nodeId) {
                 state.projectItem = null;
-                renderClipInfo();
+                state.videoFile = null;
+                renderVideoInfo();
                 updateStartButton();
                 return;
             }
             const clip = state.availableClips.find(c => String(c.nodeId) === String(nodeId));
             if (clip) {
                 state.projectItem = clip;
-                renderClipInfo();
+                state.videoFile = null;
+                renderVideoInfo();
                 updateStartButton();
+                toast(`"${clip.name}" selecionado do projeto`, 'success');
             }
         };
 
-        // Dropzone para drag-drop do Project panel
-        // CEP não expõe drop de ProjectItem direto, então interceptamos o drop
-        // e pegamos o que estava selecionado no Project naquele momento
+        // dropzone-clip legado — pode não existir no HTML atual (guarda contra null)
         const dz = document.getElementById('dropzone-clip');
-        dz.addEventListener('dragover', e => {
-            e.preventDefault();
-            dz.classList.add('dragover');
-        });
-        dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
-        dz.addEventListener('drop', async e => {
-            e.preventDefault();
-            dz.classList.remove('dragover');
-            // Tenta pegar o item selecionado no Premiere no momento do drop
-            await useSelectedFromPremiere();
-        });
-        dz.addEventListener('click', useSelectedFromPremiere);
+        if (dz) {
+            dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+            dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+            dz.addEventListener('drop', async e => {
+                e.preventDefault();
+                dz.classList.remove('dragover');
+                await useSelectedFromPremiere();
+            });
+            dz.addEventListener('click', useSelectedFromPremiere);
+        }
     }
 
     async function loadClipsFromProject() {
@@ -212,6 +239,7 @@
 
     function renderClipDropdown(preselectNodeId) {
         const dd = document.getElementById('clip-dropdown');
+        if (!dd) return;
         dd.innerHTML = '';
 
         const placeholder = document.createElement('option');
@@ -228,15 +256,8 @@
             dd.appendChild(opt);
         });
 
-        if (preselectNodeId) {
-            dd.value = preselectNodeId;
-            const clip = state.availableClips.find(c => String(c.nodeId) === String(preselectNodeId));
-            if (clip) {
-                state.projectItem = clip;
-                renderClipInfo();
-                updateStartButton();
-            }
-        }
+        // Pré-seleciona no dropdown mas não define automaticamente como fonte de vídeo
+        if (preselectNodeId) dd.value = preselectNodeId;
     }
 
     async function useSelectedFromPremiere() {
@@ -246,13 +267,18 @@
                 return toast('Nenhum clipe selecionado no Project panel do Premiere', 'warn');
             }
             state.availableClips = res.clips;
-            document.getElementById('clip-dropdown').value = res.selectedNodeId;
+            const dd = document.getElementById('clip-dropdown');
+            if (dd) dd.value = res.selectedNodeId;
             const clip = state.availableClips.find(c => String(c.nodeId) === String(res.selectedNodeId));
             if (clip) {
+                // Clipe do Premiere substitui arquivo arrastado do SO
+                state.videoFile = null;
                 state.projectItem = clip;
-                renderClipInfo();
+                state.transcriptSegments = null; // invalida transcrição anterior
+                state.transcriptMeta = null;
+                renderVideoInfo();
                 updateStartButton();
-                toast(`"${clip.name}" selecionado`, 'success');
+                toast(`"${clip.name}" selecionado do Premiere`, 'success');
             }
         } catch (e) {
             toast('Erro: ' + e.message, 'error');
@@ -260,20 +286,8 @@
     }
 
     function renderClipInfo() {
-        const info = document.getElementById('clip-info');
-        const dz = document.getElementById('dropzone-clip');
-        if (!state.projectItem) {
-            info.classList.add('hidden');
-            if (dz) dz.classList.remove('hidden');
-            return;
-        }
-        info.classList.remove('hidden');
-        if (dz) dz.classList.add('hidden');
-        document.getElementById('clip-name').textContent = state.projectItem.name;
-        const dur = state.projectItem.durationSeconds || 0;
-        const mins = Math.floor(dur / 60);
-        const secs = Math.floor(dur % 60);
-        document.getElementById('clip-meta').textContent = `Duração: ${mins}:${secs.toString().padStart(2, '0')}`;
+        // Legado — elementos clip-info removidos do HTML na v1.10
+        // A UI agora usa renderVideoInfo() para ambas as fontes
     }
 
     // ==================== TRANSCRIPT ====================
@@ -610,7 +624,8 @@
 
         // Se fonte é IA e ainda não tem transcrição (ou é de vídeo diferente), transcreve com Whisper
         if (state.transcriptSource === 'ai') {
-            const needsTranscribe = !state.transcriptSegments || (state.transcriptMeta?.sourceVideoPath !== state.videoFile?.path);
+            const currentPath = state.videoFile?.path || state.projectItem?.path;
+            const needsTranscribe = !state.transcriptSegments || (state.transcriptMeta?.sourceVideoPath !== currentPath);
             if (needsTranscribe) {
                 const ok = await runWhisperTranscription();
                 if (!ok) return;
@@ -627,8 +642,11 @@
     }
 
     async function runWhisperTranscription(forceRefresh) {
-        if (!state.videoFile || !state.videoFile.path) {
-            toast('Arraste um vídeo antes de transcrever', 'warn');
+        // Suporta tanto arquivo do SO (state.videoFile) quanto clipe do Project Panel (state.projectItem)
+        const videoPath = state.videoFile?.path || state.projectItem?.path;
+        const videoName = state.videoFile?.name || state.projectItem?.name;
+        if (!videoPath) {
+            toast('Arraste um vídeo ou selecione um clipe do Premiere antes de transcrever', 'warn');
             return false;
         }
         const openaiKey = Storage.getProviders().openai?.apiKey;
@@ -644,7 +662,7 @@
         showProgress(true, 'Preparando transcrição…', 5);
         try {
             const result = await window.AudioTranscriber.transcribe({
-                videoPath: state.videoFile.path,
+                videoPath: videoPath,
                 apiKey: openaiKey,
                 forceRefresh: !!forceRefresh,
                 onProgress: (label, pct) => showProgress(true, label, pct)
@@ -662,8 +680,8 @@
                 format: 'whisper',
                 count: result.segments.length,
                 wordsCount,
-                sourceName: state.videoFile.name,
-                sourceVideoPath: state.videoFile.path,
+                sourceName: videoName,
+                sourceVideoPath: videoPath,
                 fromCache
             };
             renderVideoInfo();
