@@ -7,6 +7,7 @@
         projectItem: null,
         transcript: null,
         transcriptMeta: null,
+        transcriptSegments: null,  // [{id,start,end,text}] para passar para providers
         results: null,
         providerId: 'anthropic',
         model: 'claude-sonnet-4-6',
@@ -196,6 +197,7 @@
     function clearTranscript() {
         state.transcript = null;
         state.transcriptMeta = null;
+        state.transcriptSegments = null;
         document.getElementById('tr-info').classList.add('hidden');
         document.getElementById('dropzone-tr').classList.remove('hidden');
         document.getElementById('file-tr').value = '';
@@ -219,14 +221,16 @@
             const result = TranscriptParser.parse(content, { durationSeconds: dur });
             console.log('[FASTVIDEO] Parser result:', result);
 
-            if (!result.text || result.segments < 2) {
-                return toast(`Transcrição inválida (formato detectado: ${result.format}, ${result.segments} seg)`, 'error');
+            if (!result.text || result.count < 2) {
+                return toast(`Transcrição inválida (formato detectado: ${result.format}, ${result.count} seg)`, 'error');
             }
             state.transcript = result.text;
+            state.transcriptSegments = result.segments;  // array [{id,start,end,text}]
             state.transcriptMeta = { ...result, sourceName };
             renderTranscriptInfo();
             updateStartButton();
-            toast(`✓ ${result.segments} segmentos carregados (${result.format})`, 'success');
+            console.log('[FASTVIDEO]', result.count, 'segmentos carregados, formato:', result.format, '| debug:', result.debug);
+            toast(`✓ ${result.count} segmentos carregados (${result.format})`, 'success');
         } catch (e) {
             console.error('[FASTVIDEO] Parser error:', e);
             toast('Erro ao processar: ' + e.message, 'error');
@@ -239,7 +243,7 @@
         info.classList.remove('hidden');
         dz.classList.add('hidden');
         document.getElementById('tr-meta').textContent =
-            `${state.transcriptMeta.sourceName} · ${state.transcriptMeta.format} · ${state.transcriptMeta.segments} linhas`;
+            `${state.transcriptMeta.sourceName} · ${state.transcriptMeta.format} · ${state.transcriptMeta.count} segmentos`;
     }
 
     // ==================== COUNT TOGGLE ====================
@@ -461,6 +465,7 @@
 
         if (durMin >= durMax) return toast('Duração mínima deve ser menor que máxima', 'warn');
 
+        console.log('[FASTVIDEO] Iniciando extração — modo:', mode, '| segmentos:', state.transcriptSegments?.length, '| modelo:', state.model);
         showProgress(true, 'Enviando para IA…', 30);
         try {
             const provider = Providers.get(state.providerId);
@@ -469,9 +474,11 @@
                 apiKey: providerConfig.apiKey,
                 model: state.model,
                 transcript: state.transcript,
+                segments: state.transcriptSegments,
                 brief: prompt,
                 mode, durMin, durMax, count,
-                maxMode: isMax
+                maxMode: isMax,
+                durationSeconds: state.projectItem?.durationSeconds || null
             });
             state.results = { ...result, mode };
             showProgress(true, 'Pronto!', 100);
@@ -504,6 +511,16 @@
         return `<span class="score-badge ${cls}" title="Virality Score">${s.toFixed(1)}</span>`;
     }
 
+    function renderAiMeta(item) {
+        const parts = [];
+        if (item.headline) parts.push(`<div class="ai-headline">${escapeHtml(item.headline)}</div>`);
+        if (item.hook)     parts.push(`<div class="ai-meta-row"><span class="ai-meta-label">Hook</span>${escapeHtml(item.hook)}</div>`);
+        if (item.caption)  parts.push(`<div class="ai-meta-row"><span class="ai-meta-label">Caption</span>${escapeHtml(item.caption)}</div>`);
+        if (item.onscreen_text) parts.push(`<div class="ai-meta-row"><span class="ai-meta-label">Onscreen</span>${escapeHtml(item.onscreen_text)}</div>`);
+        if (!parts.length) return '';
+        return `<details class="ai-meta-details"><summary>Ver headline / hook / caption</summary>${parts.join('')}</details>`;
+    }
+
     function renderClipCard(clip, idx) {
         const card = document.createElement('div');
         card.className = 'result-card';
@@ -516,6 +533,7 @@
                 </div>
                 <div class="result-timestamp">${fmt(clip.start)} → ${fmt(clip.end)} (${(clip.end - clip.start).toFixed(1)}s)</div>
                 <div class="result-reason">${escapeHtml(clip.reason || clip.text || '')}</div>
+                ${renderAiMeta(clip)}
             </div>`;
         return card;
     }
@@ -536,6 +554,7 @@
                 </div>
                 <div class="result-timestamp">${total.toFixed(1)}s total · ${(variation.clips || []).length} cortes</div>
                 <div class="result-clips">${clipsHtml}</div>
+                ${renderAiMeta(variation)}
             </div>`;
         return card;
     }

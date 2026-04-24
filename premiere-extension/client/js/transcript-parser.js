@@ -1,29 +1,29 @@
 /**
- * FASTVIDEO Transcript Parser v1.2 — detecção e parsing tolerante de
- * múltiplos formatos exportados do Adobe Premiere Pro.
+ * FASTVIDEO Transcript Parser v1.6
  *
- * Formatos suportados (detecção automática):
- *   - JSON nativo do Premiere (.prtranscript, .json)
- *   - TXT com "Speaker N  HH:MM:SS\n texto..." (export Premiere)
- *   - TXT com marcadores [HH:MM:SS]
- *   - SRT (legendas)
- *   - VTT (WebVTT)
- *   - CSV (start,end,text)
- *   - Texto puro (cola direto do painel)
+ * Novo contrato de saída:
+ *   {
+ *     text: "[mm:ss] texto\n..." (compatibilidade visual),
+ *     segments: [{ id, start, end, text }] (estruturado para IA + validação),
+ *     format: string,
+ *     count: number,
+ *     debug: object
+ *   }
  *
- * Output: { text: "[mm:ss] ...", format, segments, debug }
+ * Formatos aceitos: JSON/SRT/VTT/Premiere TXT/bracketed TXT/CSV/raw.
  */
 (function() {
 
-    function fmt(sec) {
-        var m = Math.floor(sec / 60);
-        var s = Math.floor(sec % 60);
-        return '[' + pad(m, 2) + ':' + pad(s, 2) + ']';
-    }
     function pad(n, w) {
         var s = String(n);
         while (s.length < w) s = '0' + s;
         return s;
+    }
+
+    function fmtBracket(sec) {
+        var m = Math.floor(sec / 60);
+        var s = Math.floor(sec % 60);
+        return '[' + pad(m, 2) + ':' + pad(s, 2) + ']';
     }
 
     function parseTimecode(tc) {
@@ -37,17 +37,15 @@
         return parseFloat(tc) || 0;
     }
 
-    // Remove BOM UTF-8/16 que às vezes aparece em exports do Premiere
     function stripBOM(s) {
         if (!s) return s;
         if (s.charCodeAt(0) === 0xFEFF) return s.slice(1);
         return s;
     }
 
-    // ==================== FORMAT DETECTION ====================
+    // ==================== DETECT ====================
     function detectFormat(content) {
         var sample = content.slice(0, 3000).trim();
-
         if (sample[0] === '{' || sample[0] === '[') {
             try { JSON.parse(content); return 'json'; } catch (e) {}
         }
@@ -61,21 +59,23 @@
         return 'raw-txt';
     }
 
-    // ==================== PARSERS ====================
+    // ==================== PARSERS (cada um retorna [{start, end, text}]) ====================
+
     function parseJSON(content) {
         var data = JSON.parse(content);
 
-        // Procura recursivamente por array de segmentos
         function findSegments(obj, depth) {
             if (depth > 5 || !obj) return null;
             if (Array.isArray(obj)) {
-                // É array de segmentos? Precisa ter pelo menos { start, text }
                 if (obj.length > 0 && typeof obj[0] === 'object') {
                     var first = obj[0];
-                    if ((first.start !== undefined || first.startTime !== undefined || first.begin !== undefined || first.time !== undefined || first.ts !== undefined) &&
-                        (first.text !== undefined || first.content !== undefined || first.transcript !== undefined || first.dialogue !== undefined || first.words !== undefined)) {
-                        return obj;
-                    }
+                    var hasStart = first.start !== undefined || first.startTime !== undefined
+                                 || first.begin !== undefined || first.time !== undefined
+                                 || first.ts !== undefined || first.from !== undefined;
+                    var hasText = first.text !== undefined || first.content !== undefined
+                               || first.transcript !== undefined || first.dialogue !== undefined
+                               || first.words !== undefined;
+                    if (hasStart && hasText) return obj;
                 }
                 return null;
             }
@@ -88,7 +88,6 @@
                         if (found) return found;
                     }
                 }
-                // Varredura genérica
                 for (var k in obj) {
                     if (obj.hasOwnProperty(k)) {
                         var f = findSegments(obj[k], depth + 1);
@@ -99,34 +98,46 @@
             return null;
         }
 
-        var segments = findSegments(data, 0);
-        if (!segments) throw new Error('JSON sem array de segmentos reconhecível');
+        var segs = findSegments(data, 0);
+        if (!segs) throw new Error('JSON sem array de segmentos reconhecível');
 
-        var lines = [];
-        for (var i = 0; i < segments.length; i++) {
-            var s = segments[i] || {};
-            var start = s.start ?? s.startTime ?? s.begin ?? s.time ?? s.ts ?? s.from ?? 0;
+        var out = [];
+        for (var i = 0; i < segs.length; i++) {
+            var s = segs[i] || {};
+            var start = s.start !== undefined ? s.start
+                      : s.startTime !== undefined ? s.startTime
+                      : s.begin !== undefined ? s.begin
+                      : s.time !== undefined ? s.time
+                      : s.ts !== undefined ? s.ts
+                      : s.from !== undefined ? s.from : 0;
+            var end = s.end !== undefined ? s.end
+                    : s.endTime !== undefined ? s.endTime
+                    : s.finish !== undefined ? s.finish
+                    : s.to !== undefined ? s.to
+                    : (s.duration !== undefined ? (Number(start) + Number(s.duration)) : null);
+
             if (typeof start === 'string') start = parseTimecode(start);
-            var text = s.text || s.content || s.transcript || s.dialogue || '';
+            if (typeof end === 'string') end = parseTimecode(end);
 
-            // Formatos com array de palavras {word, start}
+            var text = s.text || s.content || s.transcript || s.dialogue || '';
             if (!text && s.words && Array.isArray(s.words)) {
                 text = s.words.map(function(w) { return w.word || w.text || ''; }).join(' ');
             }
-
-            if (text) lines.push(fmt(start) + ' ' + String(text).replace(/\s+/g, ' ').trim());
+            text = String(text || '').replace(/\s+/g, ' ').trim();
+            if (!text) continue;
+            out.push({ start: Number(start) || 0, end: end !== null ? Number(end) : null, text: text });
         }
-        if (lines.length < 2) throw new Error('JSON parseou mas sem segmentos úteis');
-        return lines.join('\n');
+        return out;
     }
 
     function parseSRT(content) {
         var lines = content.split(/\r?\n/);
         var out = [];
         for (var i = 0; i < lines.length; i++) {
-            var m = lines[i].match(/^(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->/);
+            var m = lines[i].match(/^(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/);
             if (m) {
-                var start = +m[1] * 3600 + +m[2] * 60 + +m[3];
+                var start = +m[1] * 3600 + +m[2] * 60 + +m[3] + +m[4] / 1000;
+                var end   = +m[5] * 3600 + +m[6] * 60 + +m[7] + +m[8] / 1000;
                 var textLines = [];
                 i++;
                 while (i < lines.length && lines[i].trim() !== '') {
@@ -134,21 +145,26 @@
                     i++;
                 }
                 if (textLines.length) {
-                    out.push(fmt(start) + ' ' + textLines.join(' ').replace(/<[^>]+>/g, '').trim());
+                    out.push({
+                        start: start, end: end,
+                        text: textLines.join(' ').replace(/<[^>]+>/g, '').trim()
+                    });
                 }
             }
         }
-        return out.join('\n');
+        return out;
     }
 
     function parseVTT(content) {
         var lines = content.split(/\r?\n/);
         var out = [];
         for (var i = 0; i < lines.length; i++) {
-            var m = lines[i].match(/(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})\s*-->/);
+            var m = lines[i].match(/(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})/);
             if (m) {
-                var h = m[1] ? +m[1] : 0;
-                var start = h * 3600 + +m[2] * 60 + +m[3];
+                var h1 = m[1] ? +m[1] : 0;
+                var start = h1 * 3600 + +m[2] * 60 + +m[3] + +m[4] / 1000;
+                var h2 = m[5] ? +m[5] : 0;
+                var end = h2 * 3600 + +m[6] * 60 + +m[7] + +m[8] / 1000;
                 var textLines = [];
                 i++;
                 while (i < lines.length && lines[i].trim() !== '') {
@@ -156,24 +172,21 @@
                     i++;
                 }
                 if (textLines.length) {
-                    out.push(fmt(start) + ' ' + textLines.join(' ').replace(/<[^>]+>/g, '').trim());
+                    out.push({
+                        start: start, end: end,
+                        text: textLines.join(' ').replace(/<[^>]+>/g, '').trim()
+                    });
                 }
             }
         }
-        return out.join('\n');
+        return out;
     }
 
     function parsePremiereTXT(content) {
-        // Formatos possíveis no export de TXT do Premiere:
-        //   "Speaker 1  00:00:05"     (2 espaços)
-        //   "Speaker 1\t00:00:05"     (tab)
-        //   "Speaker 1 00:00:05"      (espaço simples)
-        // Seguido de uma ou mais linhas de texto
         var lines = content.split(/\r?\n/);
         var out = [];
         var currentStart = null;
         var currentText = [];
-
         var headerRe = /^(?:Speaker\s+\S+\s+|)(\d{1,2}:\d{2}(?::\d{2})?)\s*$/;
 
         for (var i = 0; i < lines.length; i++) {
@@ -181,7 +194,7 @@
             var m = line.match(headerRe);
             if (m) {
                 if (currentStart !== null && currentText.length) {
-                    out.push(fmt(currentStart) + ' ' + currentText.join(' ').trim());
+                    out.push({ start: currentStart, end: null, text: currentText.join(' ').trim() });
                 }
                 currentStart = parseTimecode(m[1]);
                 currentText = [];
@@ -190,9 +203,9 @@
             }
         }
         if (currentStart !== null && currentText.length) {
-            out.push(fmt(currentStart) + ' ' + currentText.join(' ').trim());
+            out.push({ start: currentStart, end: null, text: currentText.join(' ').trim() });
         }
-        return out.join('\n');
+        return out;
     }
 
     function parseBracketedTXT(content) {
@@ -201,21 +214,20 @@
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i].replace(/^﻿/, '');
             var m = line.match(/\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(.+)/);
-            if (m) out.push(fmt(parseTimecode(m[1])) + ' ' + m[2].trim());
+            if (m) out.push({ start: parseTimecode(m[1]), end: null, text: m[2].trim() });
         }
-        return out.join('\n');
+        return out;
     }
 
     function parseTimecodeTXT(content) {
-        // Linhas como: "00:00:05 texto da frase"
         var lines = content.split(/\r?\n/);
         var out = [];
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i].replace(/^﻿/, '');
             var m = line.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)/);
-            if (m) out.push(fmt(parseTimecode(m[1])) + ' ' + m[2].trim());
+            if (m) out.push({ start: parseTimecode(m[1]), end: null, text: m[2].trim() });
         }
-        return out.join('\n');
+        return out;
     }
 
     function parseCSV(content) {
@@ -227,37 +239,69 @@
             var parts = line.split(/[,;\t]/);
             if (parts.length >= 3 && /^[\d.:]+$/.test(parts[0].trim())) {
                 var start = parseTimecode(parts[0]);
+                var end = parseTimecode(parts[1]);
                 var text = parts.slice(2).join(',').replace(/^"|"$/g, '').trim();
-                if (text) out.push(fmt(start) + ' ' + text);
+                if (text) out.push({ start: start, end: end, text: text });
             }
         }
-        return out.join('\n');
+        return out;
     }
 
     function parseRawTXT(content, estimatedDurationSec) {
-        // Limpa e normaliza
         var text = content.replace(/\s+/g, ' ').trim();
-        if (!text) return '';
-
-        // Tenta quebrar em frases; se poucas, usa tamanho fixo
-        var sentences = text.match(/[^.!?…]+[.!?…]+/g) || text.split(/\s+/).reduce(function(acc, w, i) {
-            var chunk = Math.floor(i / 25);
-            acc[chunk] = (acc[chunk] || '') + ' ' + w;
-            return acc;
-        }, []);
-
+        if (!text) return [];
+        var sentences = text.match(/[^.!?…]+[.!?…]+/g);
+        if (!sentences || sentences.length < 2) {
+            // Chunks de ~25 palavras
+            var words = text.split(/\s+/);
+            sentences = [];
+            for (var i = 0; i < words.length; i += 25) {
+                sentences.push(words.slice(i, i + 25).join(' '));
+            }
+        }
         var totalWords = text.split(/\s+/).length;
         var duration = estimatedDurationSec || Math.max(totalWords / 2.5, 10);
         var wps = totalWords / duration;
         var out = [];
         var cursor = 0;
-        for (var i = 0; i < sentences.length; i++) {
-            var s = sentences[i].trim();
+        for (var j = 0; j < sentences.length; j++) {
+            var s = sentences[j].trim();
             if (!s) continue;
-            out.push(fmt(cursor) + ' ' + s);
-            cursor += (s.split(/\s+/).length / wps);
+            var wordCount = s.split(/\s+/).length;
+            var durSec = wordCount / wps;
+            out.push({ start: cursor, end: cursor + durSec, text: s });
+            cursor += durSec;
         }
-        return out.join('\n');
+        return out;
+    }
+
+    // ==================== POST-PROCESS ====================
+
+    // Se end não está disponível, estima a partir do próximo segmento ou words/wps
+    function fillMissingEnds(segments, estimatedDurationSec) {
+        if (!segments.length) return segments;
+        for (var i = 0; i < segments.length; i++) {
+            var s = segments[i];
+            if (s.end === null || s.end === undefined || s.end <= s.start) {
+                if (i < segments.length - 1) {
+                    s.end = segments[i + 1].start;
+                } else if (estimatedDurationSec) {
+                    s.end = Math.min(estimatedDurationSec, s.start + Math.max(3, s.text.split(/\s+/).length / 2.5));
+                } else {
+                    s.end = s.start + Math.max(3, s.text.split(/\s+/).length / 2.5);
+                }
+            }
+        }
+        return segments;
+    }
+
+    function toBracketText(segments) {
+        return segments.map(function(s) { return fmtBracket(s.start) + ' ' + s.text; }).join('\n');
+    }
+
+    function addIds(segments) {
+        for (var i = 0; i < segments.length; i++) segments[i].id = i + 1;
+        return segments;
     }
 
     // ==================== PUBLIC API ====================
@@ -272,54 +316,47 @@
             var debug = { detected: null, tried: [], finalFormat: null };
             var format = detectFormat(content);
             debug.detected = format;
-            var result = null;
-            var attemptedFormats = [];
+            var segments = null;
 
             function tryParse(fmtName, fn) {
-                attemptedFormats.push(fmtName);
                 try {
                     var r = fn();
-                    if (r && r.length > 20 && r.split('\n').length >= 2) {
-                        debug.finalFormat = fmtName;
-                        return r;
-                    }
+                    if (r && r.length >= 2) { debug.finalFormat = fmtName; return r; }
                 } catch (e) {
                     debug.tried.push({ format: fmtName, error: e.message });
                 }
                 return null;
             }
 
-            // Tenta o formato detectado primeiro, depois fallbacks em ordem de prioridade
             var order = [format];
-            var fallbacks = ['json', 'srt', 'vtt', 'premiere-txt', 'bracketed-txt', 'timecode-txt', 'csv'];
-            for (var i = 0; i < fallbacks.length; i++) {
-                if (fallbacks[i] !== format) order.push(fallbacks[i]);
+            ['json', 'srt', 'vtt', 'premiere-txt', 'bracketed-txt', 'timecode-txt', 'csv'].forEach(function(f) {
+                if (f !== format) order.push(f);
+            });
+
+            for (var i = 0; i < order.length && !segments; i++) {
+                var f = order[i];
+                if (f === 'json')              segments = tryParse('json',           function() { return parseJSON(content); });
+                else if (f === 'srt')          segments = tryParse('srt',            function() { return parseSRT(content); });
+                else if (f === 'vtt')          segments = tryParse('vtt',            function() { return parseVTT(content); });
+                else if (f === 'premiere-txt') segments = tryParse('premiere-txt',   function() { return parsePremiereTXT(content); });
+                else if (f === 'bracketed-txt')segments = tryParse('bracketed-txt',  function() { return parseBracketedTXT(content); });
+                else if (f === 'timecode-txt') segments = tryParse('timecode-txt',   function() { return parseTimecodeTXT(content); });
+                else if (f === 'csv')          segments = tryParse('csv',            function() { return parseCSV(content); });
             }
 
-            for (var j = 0; j < order.length; j++) {
-                var f = order[j];
-                if (f === 'json')          result = tryParse('json',          function() { return parseJSON(content); });
-                else if (f === 'srt')      result = tryParse('srt',           function() { return parseSRT(content); });
-                else if (f === 'vtt')      result = tryParse('vtt',           function() { return parseVTT(content); });
-                else if (f === 'premiere-txt')  result = tryParse('premiere-txt',  function() { return parsePremiereTXT(content); });
-                else if (f === 'bracketed-txt') result = tryParse('bracketed-txt', function() { return parseBracketedTXT(content); });
-                else if (f === 'timecode-txt')  result = tryParse('timecode-txt',  function() { return parseTimecodeTXT(content); });
-                else if (f === 'csv')      result = tryParse('csv',           function() { return parseCSV(content); });
-                if (result) break;
-            }
-
-            if (!result) {
-                result = parseRawTXT(content, opts.durationSeconds);
+            if (!segments || segments.length < 2) {
+                segments = parseRawTXT(content, opts.durationSeconds);
                 debug.finalFormat = 'raw-fallback';
             }
 
-            var segmentCount = result.split('\n').filter(function(l) { return l.trim(); }).length;
-            debug.tried.push({ format: 'attempts', list: attemptedFormats });
+            fillMissingEnds(segments, opts.durationSeconds);
+            addIds(segments);
 
             return {
-                text: result,
+                text: toBracketText(segments),
+                segments: segments,
                 format: debug.finalFormat,
-                segments: segmentCount,
+                count: segments.length,
                 debug: debug
             };
         },

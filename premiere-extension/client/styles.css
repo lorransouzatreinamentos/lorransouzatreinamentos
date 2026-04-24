@@ -450,6 +450,61 @@ select {
     border-radius: 3px;
 }
 
+/* Metadados gerados pela IA (headline/hook/caption/onscreen_text) */
+.ai-meta-details {
+    margin-top: 6px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.ai-meta-details summary {
+    font-size: 11px;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 3px 0;
+    user-select: none;
+    list-style: none;
+}
+
+.ai-meta-details summary::before {
+    content: '▸ ';
+    font-size: 9px;
+}
+
+.ai-meta-details[open] summary::before {
+    content: '▾ ';
+}
+
+.ai-meta-details[open] {
+    background: var(--bg-2);
+    padding: 4px 8px 6px;
+    border: 1px solid var(--border);
+}
+
+.ai-headline {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.ai-meta-row {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 2px;
+}
+
+.ai-meta-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 5px;
+}
+
 .results-actions {
     display: flex;
     flex-direction: column;

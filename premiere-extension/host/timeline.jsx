@@ -1,17 +1,14 @@
 /**
- * Timeline operations — v1.4
+ * Timeline operations — v1.6
  *
- * FIX CRÍTICO v1.4:
- *   insertClip/overwriteClip do Premiere interpretam strings como 0 segundos
- *   (documentado em fóruns Adobe: strings viram 0s, números são lidos como
- *   segundos). Agora SEMPRE passamos tempo como NÚMERO em segundos.
- *   createSubClip continua recebendo ticks em string (documentação oficial).
+ * Melhorias v1.6 (#7):
+ *  - Valida start/end contra duração real do item antes de qualquer inserção
+ *  - Busca a track correta onde o clipe reference vive (não assume videoTracks[0])
+ *  - Mensagens de erro claras e específicas
  *
- * Regras:
- *   - UMA sequência para tudo
- *   - Modo contínuo: cada trecho com cor diferente, gap 30s
- *   - Modo compilação: variação = grupo com mesma cor, gap 30s entre grupos
- *   - Vídeo original completo no final com gap de 90s
+ * Fix crítico v1.4 (mantido):
+ *  insertClip/overwriteClip recebe NÚMERO em segundos (string = 0).
+ *  createSubClip recebe ticks em STRING (documentação Adobe).
  */
 var Timeline = (function() {
     var TICKS = 254016000000;
@@ -25,6 +22,87 @@ var Timeline = (function() {
         return String(Math.round(sec * TICKS));
     }
 
+    // ==================== VALIDAÇÃO DE DURAÇÃO (#7) ====================
+
+    function getItemDuration(projectItem) {
+        try {
+            var ticks = projectItem.getOutPoint().ticks - projectItem.getInPoint().ticks;
+            var sec = parseFloat(ticks) / TICKS;
+            if (sec > 0) return sec;
+        } catch (e) {}
+        try {
+            var md = projectItem.getProjectMetadata();
+            var m = md.match(/<premierePrivateProjectMetaData:Column\.Intrinsic\.MediaDuration>([^<]+)</);
+            if (m) {
+                var parts = m[1].split(':');
+                if (parts.length === 4) return (+parts[0]) * 3600 + (+parts[1]) * 60 + (+parts[2]) + (+parts[3]) / 30;
+                return parseFloat(m[1]);
+            }
+        } catch (e) {}
+        return 0;
+    }
+
+    // Retorna { start, end } clampados na duração do item, ou null se inválidos
+    function clampToItemDuration(startSec, endSec, itemDurationSec) {
+        startSec = parseFloat(startSec);
+        endSec   = parseFloat(endSec);
+        if (isNaN(startSec) || isNaN(endSec)) return null;
+        if (startSec < 0) {
+            $.writeln('[FV] start negativo corrigido para 0: ' + startSec);
+            startSec = 0;
+        }
+        if (itemDurationSec > 0) {
+            if (startSec >= itemDurationSec) {
+                $.writeln('[FV] start (' + startSec + ') >= duração do item (' + itemDurationSec + ')');
+                return null;
+            }
+            if (endSec > itemDurationSec) {
+                $.writeln('[FV] end (' + endSec + ') > duração (' + itemDurationSec + '): clampando');
+                endSec = itemDurationSec;
+            }
+        }
+        if (endSec <= startSec + 0.5) {
+            $.writeln('[FV] Duração efetiva <0.5s: start=' + startSec + ' end=' + endSec);
+            return null;
+        }
+        return { start: startSec, end: endSec };
+    }
+
+    // ==================== TRACK FINDER (#7) ====================
+
+    // Encontra o índice de videoTrack onde o referenceItem aparece
+    function findTrackIndex(sequence, referenceItem) {
+        try {
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+                var track = sequence.videoTracks[t];
+                for (var c = 0; c < track.clips.numItems; c++) {
+                    var cl = track.clips[c];
+                    if (cl.projectItem && cl.projectItem.nodeId === referenceItem.nodeId) {
+                        return t;
+                    }
+                }
+            }
+        } catch (e) {}
+        return 0; // fallback para track 0
+    }
+
+    function findAudioTrackIndex(sequence, referenceItem) {
+        try {
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+                var track = sequence.audioTracks[t];
+                for (var c = 0; c < track.clips.numItems; c++) {
+                    var cl = track.clips[c];
+                    if (cl.projectItem && cl.projectItem.nodeId === referenceItem.nodeId) {
+                        return t;
+                    }
+                }
+            }
+        } catch (e) {}
+        return 0;
+    }
+
+    // ==================== CREATE SEQUENCE ====================
+
     function createSequence(name, referenceItem) {
         var project = app.project;
         try {
@@ -34,21 +112,14 @@ var Timeline = (function() {
                 project.activeSequence = newSeq;
                 try {
                     var track = newSeq.videoTracks[0];
-                    for (var i = track.clips.numItems - 1; i >= 0; i--) {
-                        track.clips[i].remove(false, false);
-                    }
+                    for (var i = track.clips.numItems - 1; i >= 0; i--) track.clips[i].remove(false, false);
                     var atrack = newSeq.audioTracks[0];
-                    for (var j = atrack.clips.numItems - 1; j >= 0; j--) {
-                        atrack.clips[j].remove(false, false);
-                    }
+                    for (var j = atrack.clips.numItems - 1; j >= 0; j--) atrack.clips[j].remove(false, false);
                 } catch (e) {}
                 return newSeq;
             }
         } catch (e) {}
-        try {
-            qe.project.newSequence(name, null);
-            return app.project.activeSequence;
-        } catch (e2) {}
+        try { qe.project.newSequence(name, null); return app.project.activeSequence; } catch (e2) {}
         return app.project.activeSequence;
     }
 
@@ -60,55 +131,48 @@ var Timeline = (function() {
         }
     }
 
-    /**
-     * Insere um trecho (sub-range) do clipe original na sequência.
-     *
-     * IMPORTANTE: insertClip aceita NÚMERO em segundos. Strings viram 0.
-     * createSubClip aceita ticks como STRING (documentado).
-     */
+    // ==================== INSERT SUBCLIP RANGE ====================
+
     function insertSubclipRange(referenceItem, sequence, startSec, endSec, offsetSec, colorIdx) {
-        startSec = parseFloat(startSec);
-        endSec = parseFloat(endSec);
-        offsetSec = Math.max(0, parseFloat(offsetSec));
-        if (isNaN(startSec) || isNaN(endSec) || startSec < 0 || endSec <= startSec) {
-            $.writeln('[FV] Timestamps inválidos: start=' + startSec + ' end=' + endSec);
+        var itemDur = getItemDuration(referenceItem);
+        var clamped = clampToItemDuration(startSec, endSec, itemDur);
+        if (!clamped) {
+            $.writeln('[FV] insertSubclipRange: clamp falhou start=' + startSec + ' end=' + endSec + ' dur=' + itemDur);
             return false;
         }
+        startSec  = clamped.start;
+        endSec    = clamped.end;
+        offsetSec = Math.max(0, parseFloat(offsetSec));
+
+        var vTrackIdx = findTrackIndex(sequence, referenceItem);
+        $.writeln('[FV] insertSubclipRange: track=' + vTrackIdx + ' start=' + startSec + ' end=' + endSec + ' offset=' + offsetSec);
 
         SUBCLIP_COUNTER++;
         var subName = 'FV_' + SUBCLIP_COUNTER + '_' + startSec.toFixed(1) + '-' + endSec.toFixed(1);
 
+        // Tenta createSubClip (ticks como STRING — documentação Adobe)
         try {
-            // createSubClip: ticks como STRING (conforme docs Adobe)
-            var sub = referenceItem.createSubClip(
-                subName,
-                ticksStr(startSec),
-                ticksStr(endSec),
-                0, 1, 1
-            );
+            var sub = referenceItem.createSubClip(subName, ticksStr(startSec), ticksStr(endSec), 0, 1, 1);
             if (sub) {
                 if (typeof colorIdx === 'number') setLabelColor(sub, colorIdx);
-                // insertClip: tempo como NÚMERO em segundos (fix crítico v1.4)
-                sequence.videoTracks[0].insertClip(sub, offsetSec);
-                if (sequence.audioTracks.numTracks > 0) {
-                    sequence.audioTracks[0].insertClip(sub, offsetSec);
-                }
+                sequence.videoTracks[vTrackIdx].insertClip(sub, offsetSec);
+                try {
+                    var aIdx = findAudioTrackIndex(sequence, referenceItem);
+                    if (sequence.audioTracks.numTracks > 0) sequence.audioTracks[aIdx].insertClip(sub, offsetSec);
+                } catch (e) {}
                 return true;
             }
         } catch (e) {
             $.writeln('[FV] createSubClip falhou: ' + e.message);
         }
 
-        // Fallback: overwriteClip com in/out explícitos (não muta o item)
+        // Fallback: overwriteClip com in/out explícitos
         try {
-            sequence.videoTracks[0].overwriteClip(
-                referenceItem, offsetSec, ticksStr(startSec), ticksStr(endSec)
-            );
-            if (sequence.audioTracks.numTracks > 0) {
-                sequence.audioTracks[0].overwriteClip(
-                    referenceItem, offsetSec, ticksStr(startSec), ticksStr(endSec)
-                );
-            }
+            sequence.videoTracks[vTrackIdx].overwriteClip(referenceItem, offsetSec, ticksStr(startSec), ticksStr(endSec));
+            try {
+                var aIdx2 = findAudioTrackIndex(sequence, referenceItem);
+                if (sequence.audioTracks.numTracks > 0) sequence.audioTracks[aIdx2].overwriteClip(referenceItem, offsetSec, ticksStr(startSec), ticksStr(endSec));
+            } catch (e) {}
             return true;
         } catch (e2) {
             $.writeln('[FV] overwriteClip falhou: ' + e2.message);
@@ -118,11 +182,13 @@ var Timeline = (function() {
 
     function insertFullClip(referenceItem, sequence, offsetSec) {
         offsetSec = Math.max(0, parseFloat(offsetSec));
+        var vTrackIdx = findTrackIndex(sequence, referenceItem);
         try {
-            sequence.videoTracks[0].insertClip(referenceItem, offsetSec);
-            if (sequence.audioTracks.numTracks > 0) {
-                sequence.audioTracks[0].insertClip(referenceItem, offsetSec);
-            }
+            sequence.videoTracks[vTrackIdx].insertClip(referenceItem, offsetSec);
+            try {
+                var aIdx = findAudioTrackIndex(sequence, referenceItem);
+                if (sequence.audioTracks.numTracks > 0) sequence.audioTracks[aIdx].insertClip(referenceItem, offsetSec);
+            } catch (e) {}
             return true;
         } catch (e) {
             $.writeln('[FV] insertFullClip falhou: ' + e.message);
@@ -130,28 +196,16 @@ var Timeline = (function() {
         }
     }
 
-    /**
-     * Modo "Editar timeline existente": em vez de inserir novos subclipes,
-     * aplica razor cuts no clipe existente na timeline ativa e pinta os
-     * trechos escolhidos com cores distintas (resto fica cinza/neutro).
-     *
-     * Estratégia:
-     *   1. Encontra o clipe na videoTracks[0] que corresponde ao referenceItem
-     *   2. Coleta todos os pontos de corte (start/end de cada trecho escolhido)
-     *   3. Aplica razor nos pontos via QE DOM
-     *   4. Para cada segmento cortado que corresponde a um trecho escolhido,
-     *      aplica setColorLabel com a cor do grupo; resto fica como label neutro
-     */
+    // ==================== EDIT EXISTING TIMELINE ====================
+
     function editExistingTimeline(referenceItem, sequence, payload) {
         var editsApplied = 0;
         var groupCount = 0;
+        var itemDur = getItemDuration(referenceItem);
 
-        try {
-            app.enableQE();
-        } catch (e) {}
+        try { app.enableQE(); } catch (e) {}
 
-        // Coleta pontos de corte ordenados + mapeamento para cor
-        var cuts = [];  // [{ start, end, color }]
+        var cuts = [];
 
         if (payload.mode === 'compilation') {
             for (var v = 0; v < payload.items.length; v++) {
@@ -160,70 +214,63 @@ var Timeline = (function() {
                 var any = false;
                 for (var c = 0; c < (variation.clips || []).length; c++) {
                     var clip = variation.clips[c];
-                    var s = parseFloat(clip.start);
-                    var e = parseFloat(clip.end);
-                    if (!isNaN(s) && !isNaN(e) && e > s) {
-                        cuts.push({ start: s, end: e, color: vColor });
-                        any = true;
-                    }
+                    var clamped = clampToItemDuration(clip.start, clip.end, itemDur);
+                    if (clamped) { cuts.push({ start: clamped.start, end: clamped.end, color: vColor }); any = true; }
+                    else $.writeln('[FV] editExisting: clip compilation inválido, ignorado');
                 }
                 if (any) groupCount++;
             }
         } else {
             for (var i = 0; i < payload.items.length; i++) {
                 var item = payload.items[i];
-                var st = parseFloat(item.start);
-                var en = parseFloat(item.end);
-                if (!isNaN(st) && !isNaN(en) && en > st) {
-                    var col = LABEL_COLORS[groupCount % LABEL_COLORS.length];
-                    cuts.push({ start: st, end: en, color: col });
+                var cl = clampToItemDuration(item.start, item.end, itemDur);
+                if (cl) {
+                    cuts.push({ start: cl.start, end: cl.end, color: LABEL_COLORS[groupCount % LABEL_COLORS.length] });
                     groupCount++;
+                } else {
+                    $.writeln('[FV] editExisting: item continuous inválido, ignorado');
                 }
             }
         }
 
         if (!cuts.length) return { inserted: 0, groups: 0, remainingAppended: false };
 
-        // Aplica razor via QE DOM em cada ponto único
+        // Razor via QE DOM
         var razorPoints = {};
         for (var k = 0; k < cuts.length; k++) {
             razorPoints[cuts[k].start.toFixed(3)] = cuts[k].start;
-            razorPoints[cuts[k].end.toFixed(3)] = cuts[k].end;
+            razorPoints[cuts[k].end.toFixed(3)]   = cuts[k].end;
         }
         var qSeq = null;
         try { qSeq = qe.project.getActiveSequence(); } catch (e) {}
 
         for (var key in razorPoints) {
             if (razorPoints.hasOwnProperty(key)) {
-                var timeSec = razorPoints[key];
                 try {
                     if (qSeq) {
-                        var track = qSeq.getVideoTrackAt(0);
-                        if (track && track.razor) track.razor(String(timeSec));
-                        var atr = qSeq.getAudioTrackAt(0);
-                        if (atr && atr.razor) atr.razor(String(timeSec));
+                        var track = qSeq.getVideoTrackAt(findTrackIndex(sequence, referenceItem));
+                        if (track && track.razor) track.razor(String(razorPoints[key]));
+                        var atr = qSeq.getAudioTrackAt(findAudioTrackIndex(sequence, referenceItem));
+                        if (atr && atr.razor) atr.razor(String(razorPoints[key]));
                     }
                 } catch (e) {
-                    $.writeln('[FV] razor falhou em ' + timeSec + ': ' + e.message);
+                    $.writeln('[FV] razor falhou em ' + razorPoints[key] + ': ' + e.message);
                 }
             }
         }
 
-        // Agora percorre os clipes da track e pinta os que caem DENTRO de algum trecho
+        // Pinta os clipes que caem nos ranges escolhidos
         try {
-            var vTrack = sequence.videoTracks[0];
+            var vTrack = sequence.videoTracks[findTrackIndex(sequence, referenceItem)];
             for (var n = 0; n < vTrack.clips.numItems; n++) {
                 var tClip = vTrack.clips[n];
                 var clipStart = parseFloat(tClip.start.seconds);
-                var clipEnd = parseFloat(tClip.end.seconds);
-
+                var clipEnd   = parseFloat(tClip.end.seconds);
                 for (var m = 0; m < cuts.length; m++) {
                     var cut = cuts[m];
-                    // Clipe cai dentro do range escolhido (com tolerância)
                     if (clipStart >= cut.start - 0.05 && clipEnd <= cut.end + 0.05) {
                         try {
                             if (tClip.projectItem) setLabelColor(tClip.projectItem, cut.color);
-                            // Também tenta setar label no trackItem
                             if (tClip.setColorLabel) tClip.setColorLabel(cut.color);
                         } catch (e) {}
                         editsApplied++;
@@ -235,13 +282,10 @@ var Timeline = (function() {
             $.writeln('[FV] erro pintando cortes: ' + e.message);
         }
 
-        return {
-            inserted: editsApplied,
-            groups: groupCount,
-            remainingAppended: false,
-            mode: 'edit-timeline'
-        };
+        return { inserted: editsApplied, groups: groupCount, remainingAppended: false, mode: 'edit-timeline' };
     }
+
+    // ==================== INSERT ITEMS ====================
 
     return {
         createSequence: createSequence,
@@ -253,8 +297,10 @@ var Timeline = (function() {
             var offsetSec = 0;
             var groupCount = 0;
             var appendRemaining = payload.appendRemaining !== false;
+            var itemDur = getItemDuration(referenceItem);
 
-            // Playhead atual como ponto inicial
+            $.writeln('[FV] insertItems: modo=' + payload.mode + ' dur=' + itemDur + 's');
+
             try {
                 if (sequence.getPlayerPosition) {
                     var pp = sequence.getPlayerPosition();
@@ -267,48 +313,39 @@ var Timeline = (function() {
                     var variation = payload.items[v];
                     var groupColor = LABEL_COLORS[groupCount % LABEL_COLORS.length];
                     var groupInsertedAny = false;
-
                     for (var c = 0; c < (variation.clips || []).length; c++) {
                         var clip = variation.clips[c];
-                        var startSec = parseFloat(clip.start);
-                        var endSec = parseFloat(clip.end);
-                        if (insertSubclipRange(referenceItem, sequence, startSec, endSec, offsetSec, groupColor)) {
-                            offsetSec += (endSec - startSec);
+                        var clamped = clampToItemDuration(clip.start, clip.end, itemDur);
+                        if (!clamped) { $.writeln('[FV] clip compilation ignorado: fora dos limites'); continue; }
+                        if (insertSubclipRange(referenceItem, sequence, clamped.start, clamped.end, offsetSec, groupColor)) {
+                            offsetSec += (clamped.end - clamped.start);
                             inserted++;
                             groupInsertedAny = true;
                         }
                     }
-
-                    if (groupInsertedAny) {
-                        offsetSec += GAP_BETWEEN_GROUPS_SEC;
-                        groupCount++;
-                    }
+                    if (groupInsertedAny) { offsetSec += GAP_BETWEEN_GROUPS_SEC; groupCount++; }
                 }
             } else {
                 for (var i = 0; i < payload.items.length; i++) {
                     var item = payload.items[i];
-                    var s = parseFloat(item.start);
-                    var e = parseFloat(item.end);
+                    var cl = clampToItemDuration(item.start, item.end, itemDur);
+                    if (!cl) { $.writeln('[FV] item continuous ignorado: fora dos limites'); continue; }
                     var col = LABEL_COLORS[groupCount % LABEL_COLORS.length];
-                    if (insertSubclipRange(referenceItem, sequence, s, e, offsetSec, col)) {
-                        offsetSec += (e - s) + GAP_BETWEEN_GROUPS_SEC;
+                    if (insertSubclipRange(referenceItem, sequence, cl.start, cl.end, offsetSec, col)) {
+                        offsetSec += (cl.end - cl.start) + GAP_BETWEEN_GROUPS_SEC;
                         inserted++;
                         groupCount++;
                     }
                 }
             }
 
-            // Vídeo original completo no final
             if (appendRemaining && inserted > 0) {
                 var finalOffset = offsetSec + GAP_BEFORE_REMAINING_SEC - GAP_BETWEEN_GROUPS_SEC;
                 insertFullClip(referenceItem, sequence, finalOffset);
             }
 
-            return {
-                inserted: inserted,
-                groups: groupCount,
-                remainingAppended: appendRemaining && inserted > 0
-            };
+            $.writeln('[FV] insertItems concluído: ' + inserted + ' inseridos');
+            return { inserted: inserted, groups: groupCount, remainingAppended: appendRemaining && inserted > 0 };
         }
     };
 })();
