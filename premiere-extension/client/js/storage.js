@@ -79,13 +79,28 @@
                 },
                 {
                     id: 'seed-2',
-                    name: 'Financeiro/Empresarial',
+                    name: 'Financeiro / Empresarial',
                     content: 'Extraia trechos sobre negócios, finanças, ROI, estratégia e cases de sucesso. Priorize insights práticos, números, e conclusões acionáveis para empresários.'
                 },
                 {
                     id: 'seed-3',
                     name: 'Reels educacionais',
                     content: 'Extraia trechos que ensinam algo específico em 30–60s. Busque: pergunta → explicação curta → exemplo → conclusão. Falas completas, sem cortar no meio.'
+                },
+                {
+                    id: 'seed-4',
+                    name: 'Event Recap / Aftermovie',
+                    content: 'Extraia as melhores falas e depoimentos para um recap de evento (casamento, festival, convenção). Priorize: emoção, testemunhos memoráveis, momentos de conexão. Frases curtas e impactantes que descrevem a experiência.'
+                },
+                {
+                    id: 'seed-5',
+                    name: 'Podcast / Entrevista — highlight quotes',
+                    content: 'Encontre as melhores citações (quotes) da entrevista — insights originais, opiniões polêmicas, frases memoráveis, momentos de sinceridade. Cada quote deve funcionar isolada como post de redes sociais.'
+                },
+                {
+                    id: 'seed-6',
+                    name: 'Hook viral TikTok / Reels',
+                    content: 'Extraia APENAS os trechos com hooks que prendem a atenção nos primeiros 3 segundos: perguntas provocativas, afirmações ousadas, revelações, "você sabia que...", "pare de fazer isso". Priorize alta curva emocional no início.'
                 }
             ];
             localStorage.setItem(NS + ':templates', JSON.stringify(seeds));

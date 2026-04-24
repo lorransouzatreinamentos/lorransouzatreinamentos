@@ -1,11 +1,16 @@
 /**
- * Timeline operations — criação de sequência única e inserção agrupada.
+ * Timeline operations — v1.4
  *
- * Regra v1.3:
- *   - UMA sequência para tudo (nunca múltiplas)
- *   - Modo contínuo: cada clipe (trecho) com cor diferente + gap 30s entre clipes
- *   - Modo compilação: cada VARIAÇÃO é um grupo de trechos com MESMA cor;
- *     grupos diferentes = cores diferentes; gap 30s entre variações
+ * FIX CRÍTICO v1.4:
+ *   insertClip/overwriteClip do Premiere interpretam strings como 0 segundos
+ *   (documentado em fóruns Adobe: strings viram 0s, números são lidos como
+ *   segundos). Agora SEMPRE passamos tempo como NÚMERO em segundos.
+ *   createSubClip continua recebendo ticks em string (documentação oficial).
+ *
+ * Regras:
+ *   - UMA sequência para tudo
+ *   - Modo contínuo: cada trecho com cor diferente, gap 30s
+ *   - Modo compilação: variação = grupo com mesma cor, gap 30s entre grupos
  *   - Vídeo original completo no final com gap de 90s
  */
 var Timeline = (function() {
@@ -13,8 +18,8 @@ var Timeline = (function() {
     var GAP_BETWEEN_GROUPS_SEC = 30;
     var GAP_BEFORE_REMAINING_SEC = 90;
 
-    // Paleta de cores visualmente distintas do Premiere (0-15)
     var LABEL_COLORS = [2, 7, 5, 6, 1, 11, 10, 3, 15, 4, 13, 0, 8, 12];
+    var SUBCLIP_COUNTER = 0;
 
     function ticksStr(sec) {
         return String(Math.round(sec * TICKS));
@@ -55,68 +60,72 @@ var Timeline = (function() {
         }
     }
 
-    // Contador para garantir nomes únicos dos subclipes (evita colisões)
-    var SUBCLIP_COUNTER = 0;
-
+    /**
+     * Insere um trecho (sub-range) do clipe original na sequência.
+     *
+     * IMPORTANTE: insertClip aceita NÚMERO em segundos. Strings viram 0.
+     * createSubClip aceita ticks como STRING (documentado).
+     */
     function insertSubclipRange(referenceItem, sequence, startSec, endSec, offsetSec, colorIdx) {
-        // Validação defensiva — se algo vier errado, ignora sem quebrar
         startSec = parseFloat(startSec);
         endSec = parseFloat(endSec);
-        offsetSec = parseFloat(offsetSec);
+        offsetSec = Math.max(0, parseFloat(offsetSec));
         if (isNaN(startSec) || isNaN(endSec) || startSec < 0 || endSec <= startSec) {
-            $.writeln('Timestamps inválidos: start=' + startSec + ' end=' + endSec);
+            $.writeln('[FV] Timestamps inválidos: start=' + startSec + ' end=' + endSec);
             return false;
         }
 
-        var inTicks = ticksStr(startSec);
-        var outTicks = ticksStr(endSec);
-        var offsetTicks = ticksStr(Math.max(0, offsetSec));
-
         SUBCLIP_COUNTER++;
-        // Nome único garantido por contador + tempo (evita colisão quando dois
-        // trechos têm mesmo Math.floor(start))
         var subName = 'FV_' + SUBCLIP_COUNTER + '_' + startSec.toFixed(1) + '-' + endSec.toFixed(1);
 
         try {
-            var sub = referenceItem.createSubClip(subName, inTicks, outTicks, 0, 1, 1);
+            // createSubClip: ticks como STRING (conforme docs Adobe)
+            var sub = referenceItem.createSubClip(
+                subName,
+                ticksStr(startSec),
+                ticksStr(endSec),
+                0, 1, 1
+            );
             if (sub) {
                 if (typeof colorIdx === 'number') setLabelColor(sub, colorIdx);
-                sequence.videoTracks[0].insertClip(sub, offsetTicks);
+                // insertClip: tempo como NÚMERO em segundos (fix crítico v1.4)
+                sequence.videoTracks[0].insertClip(sub, offsetSec);
                 if (sequence.audioTracks.numTracks > 0) {
-                    sequence.audioTracks[0].insertClip(sub, offsetTicks);
+                    sequence.audioTracks[0].insertClip(sub, offsetSec);
                 }
                 return true;
             }
         } catch (e) {
-            $.writeln('createSubClip falhou: ' + e.message);
+            $.writeln('[FV] createSubClip falhou: ' + e.message);
         }
 
-        // Fallback SEGURO: NÃO mutar referenceItem. Usa overwriteClip com
-        // inPoint/outPoint locais da inserção (Premiere 2024+) ou falha sem
-        // corromper o projeto.
+        // Fallback: overwriteClip com in/out explícitos (não muta o item)
         try {
-            // Esta API aceita in/out points explícitos sem alterar o ProjectItem
-            sequence.videoTracks[0].overwriteClip(referenceItem, offsetTicks, inTicks, outTicks);
+            sequence.videoTracks[0].overwriteClip(
+                referenceItem, offsetSec, ticksStr(startSec), ticksStr(endSec)
+            );
             if (sequence.audioTracks.numTracks > 0) {
-                sequence.audioTracks[0].overwriteClip(referenceItem, offsetTicks, inTicks, outTicks);
+                sequence.audioTracks[0].overwriteClip(
+                    referenceItem, offsetSec, ticksStr(startSec), ticksStr(endSec)
+                );
             }
             return true;
         } catch (e2) {
-            $.writeln('Fallback overwriteClip falhou: ' + e2.message);
+            $.writeln('[FV] overwriteClip falhou: ' + e2.message);
             return false;
         }
     }
 
-    function insertFullClip(referenceItem, sequence, offsetSec, colorIdx) {
-        var offsetTicks = ticksStr(Math.max(0, parseFloat(offsetSec)));
+    function insertFullClip(referenceItem, sequence, offsetSec) {
+        offsetSec = Math.max(0, parseFloat(offsetSec));
         try {
-            sequence.videoTracks[0].insertClip(referenceItem, offsetTicks);
+            sequence.videoTracks[0].insertClip(referenceItem, offsetSec);
             if (sequence.audioTracks.numTracks > 0) {
-                sequence.audioTracks[0].insertClip(referenceItem, offsetTicks);
+                sequence.audioTracks[0].insertClip(referenceItem, offsetSec);
             }
             return true;
         } catch (e) {
-            $.writeln('insertFullClip falhou: ' + e.message);
+            $.writeln('[FV] insertFullClip falhou: ' + e.message);
             return false;
         }
     }
@@ -125,21 +134,21 @@ var Timeline = (function() {
         createSequence: createSequence,
 
         insertItems: function(referenceItem, sequence, payload) {
-            SUBCLIP_COUNTER = 0; // reset por execução
+            SUBCLIP_COUNTER = 0;
             var inserted = 0;
             var offsetSec = 0;
             var groupCount = 0;
             var appendRemaining = payload.appendRemaining !== false;
 
+            // Playhead atual como ponto inicial
             try {
                 if (sequence.getPlayerPosition) {
                     var pp = sequence.getPlayerPosition();
-                    if (pp && pp.seconds) offsetSec = pp.seconds;
+                    if (pp && pp.seconds) offsetSec = parseFloat(pp.seconds) || 0;
                 }
             } catch (e) {}
 
             if (payload.mode === 'compilation') {
-                // MODO COMPILAÇÃO: cada variação = um grupo com MESMA cor
                 for (var v = 0; v < payload.items.length; v++) {
                     var variation = payload.items[v];
                     var groupColor = LABEL_COLORS[groupCount % LABEL_COLORS.length];
@@ -147,8 +156,10 @@ var Timeline = (function() {
 
                     for (var c = 0; c < (variation.clips || []).length; c++) {
                         var clip = variation.clips[c];
-                        if (insertSubclipRange(referenceItem, sequence, clip.start, clip.end, offsetSec, groupColor)) {
-                            offsetSec += (clip.end - clip.start);
+                        var startSec = parseFloat(clip.start);
+                        var endSec = parseFloat(clip.end);
+                        if (insertSubclipRange(referenceItem, sequence, startSec, endSec, offsetSec, groupColor)) {
+                            offsetSec += (endSec - startSec);
                             inserted++;
                             groupInsertedAny = true;
                         }
@@ -160,12 +171,13 @@ var Timeline = (function() {
                     }
                 }
             } else {
-                // MODO CONTÍNUO: cada trecho = um grupo individual com cor diferente
                 for (var i = 0; i < payload.items.length; i++) {
                     var item = payload.items[i];
+                    var s = parseFloat(item.start);
+                    var e = parseFloat(item.end);
                     var col = LABEL_COLORS[groupCount % LABEL_COLORS.length];
-                    if (insertSubclipRange(referenceItem, sequence, item.start, item.end, offsetSec, col)) {
-                        offsetSec += (item.end - item.start) + GAP_BETWEEN_GROUPS_SEC;
+                    if (insertSubclipRange(referenceItem, sequence, s, e, offsetSec, col)) {
+                        offsetSec += (e - s) + GAP_BETWEEN_GROUPS_SEC;
                         inserted++;
                         groupCount++;
                     }
@@ -175,8 +187,7 @@ var Timeline = (function() {
             // Vídeo original completo no final
             if (appendRemaining && inserted > 0) {
                 var finalOffset = offsetSec + GAP_BEFORE_REMAINING_SEC - GAP_BETWEEN_GROUPS_SEC;
-                insertFullClip(referenceItem, sequence, finalOffset,
-                    LABEL_COLORS[LABEL_COLORS.length - 1]);
+                insertFullClip(referenceItem, sequence, finalOffset);
             }
 
             return {

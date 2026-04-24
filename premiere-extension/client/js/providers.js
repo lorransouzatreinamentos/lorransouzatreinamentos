@@ -42,7 +42,16 @@ REGRAS CRÍTICAS E INEGOCIÁVEIS:
    - Só inclua trechos que REALMENTE se encaixam no briefing.
    - Melhor 2 trechos excelentes do que 5 medianos.
    - A quantidade de cortes internos dentro de uma variação deve ser a
-     NECESSÁRIA para contar a história — não use número fixo.`;
+     NECESSÁRIA para contar a história — não use número fixo.
+
+6. VIRALITY SCORE (0-10):
+   - Atribua um score de viralidade a cada trecho/variação.
+   - Considere: força do gancho (hook strength), emoção, completude narrativa,
+     engajamento potencial, relevância ao briefing.
+   - 10 = trecho excepcional com alta chance de viralizar
+   - 7-9 = bom, vale publicar
+   - 4-6 = ok, depende do contexto
+   - 0-3 = fraco (evite incluir trechos com score < 5)`;
 
     function buildUserPrompt({ transcript, brief, mode, durMin, durMax, count, maxMode }) {
         const quantity = maxMode
@@ -71,6 +80,7 @@ FORMATO DE RESPOSTA (JSON PURO):
   "variations": [
     {
       "label": "string curta descritiva",
+      "score": <NÚMERO_0_A_10>,
       "clips": [
         { "start": <NÚMERO_SEGUNDOS>, "end": <NÚMERO_SEGUNDOS>, "role": "hook|body|cta", "text": "fala exata" }
       ]
@@ -90,7 +100,7 @@ LEMBRE: cada opção deve ser um intervalo DIFERENTE das outras.
 FORMATO DE RESPOSTA (JSON PURO):
 {
   "clips": [
-    { "start": <NÚMERO_SEGUNDOS>, "end": <NÚMERO_SEGUNDOS>, "label": "string curta", "reason": "por que funciona", "text": "fala exata" }
+    { "start": <NÚMERO_SEGUNDOS>, "end": <NÚMERO_SEGUNDOS>, "label": "string curta", "score": <NÚMERO_0_A_10>, "reason": "por que funciona", "text": "fala exata" }
   ]
 }`;
 
@@ -145,6 +155,12 @@ ${transcript}`;
             return false;
         }
 
+        function clampScore(s) {
+            const n = Number(s);
+            if (!isFinite(n)) return 5;
+            return Math.max(0, Math.min(10, Math.round(n * 10) / 10));
+        }
+
         function cleanClip(c) {
             const start = toSeconds(c.start);
             const end = toSeconds(c.end);
@@ -157,21 +173,27 @@ ${transcript}`;
                 label: c.label || '',
                 reason: c.reason || '',
                 role: c.role || 'body',
-                text: c.text || c.content || ''
+                text: c.text || c.content || '',
+                score: clampScore(c.score)
             };
         }
 
         if (mode === 'compilation') {
             const variations = (raw.variations || []).map(v => {
-                seen.clear(); // duplicatas são por-variação
+                seen.clear();
                 const clips = (v.clips || []).map(cleanClip).filter(c => {
                     if (!c) return false;
                     return !isDuplicate(c.start, c.end);
                 });
-                return clips.length >= 1 ? { label: v.label || '', clips } : null;
+                if (clips.length < 1) return null;
+                const avgScore = clips.reduce((s, c) => s + c.score, 0) / clips.length;
+                return {
+                    label: v.label || '',
+                    score: clampScore(v.score !== undefined ? v.score : avgScore),
+                    clips
+                };
             }).filter(Boolean);
 
-            // Remove variações que são idênticas a outras (mesmos timestamps)
             const uniqueVariations = [];
             const variationSignatures = new Set();
             for (const v of variations) {
@@ -181,12 +203,16 @@ ${transcript}`;
                     uniqueVariations.push(v);
                 }
             }
+            // Ordena variações por score decrescente
+            uniqueVariations.sort((a, b) => b.score - a.score);
             result.variations = uniqueVariations;
         } else {
             const clips = (raw.clips || []).map(cleanClip).filter(c => {
                 if (!c) return false;
                 return !isDuplicate(c.start, c.end);
             });
+            // Ordena clipes por score decrescente
+            clips.sort((a, b) => b.score - a.score);
             result.clips = clips;
         }
 

@@ -435,13 +435,24 @@
         results.scrollIntoView({ behavior: 'smooth' });
     }
 
+    function scoreBadge(score) {
+        const s = Number(score) || 0;
+        let cls = 'score-low';
+        if (s >= 7) cls = 'score-high';
+        else if (s >= 4) cls = 'score-mid';
+        return `<span class="score-badge ${cls}" title="Virality Score">${s.toFixed(1)}</span>`;
+    }
+
     function renderClipCard(clip, idx) {
         const card = document.createElement('div');
         card.className = 'result-card';
         card.innerHTML = `
             <input type="checkbox" data-idx="${idx}" checked>
             <div class="result-body">
-                <div class="result-label">${escapeHtml(clip.label || 'Trecho ' + (idx + 1))}</div>
+                <div class="result-label-row">
+                    <div class="result-label">${escapeHtml(clip.label || 'Trecho ' + (idx + 1))}</div>
+                    ${scoreBadge(clip.score)}
+                </div>
                 <div class="result-timestamp">${fmt(clip.start)} → ${fmt(clip.end)} (${(clip.end - clip.start).toFixed(1)}s)</div>
                 <div class="result-reason">${escapeHtml(clip.reason || clip.text || '')}</div>
             </div>`;
@@ -458,7 +469,10 @@
         card.innerHTML = `
             <input type="checkbox" data-idx="${idx}" checked>
             <div class="result-body">
-                <div class="result-label">${escapeHtml(variation.label || 'Variação ' + (idx + 1))}</div>
+                <div class="result-label-row">
+                    <div class="result-label">${escapeHtml(variation.label || 'Variação ' + (idx + 1))}</div>
+                    ${scoreBadge(variation.score)}
+                </div>
                 <div class="result-timestamp">${total.toFixed(1)}s total · ${(variation.clips || []).length} cortes</div>
                 <div class="result-clips">${clipsHtml}</div>
             </div>`;
