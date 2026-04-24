@@ -68,6 +68,9 @@
 
         const clearBtn = document.getElementById('btn-clear-video');
         if (clearBtn) clearBtn.onclick = clearVideo;
+
+        const reproBtn = document.getElementById('btn-reprocess-transcription');
+        if (reproBtn) reproBtn.onclick = reprocessTranscription;
     }
 
     function renderVideoInfo() {
@@ -82,10 +85,21 @@
         dz?.classList.add('hidden');
         const nameEl = document.getElementById('video-name');
         const metaEl = document.getElementById('video-meta');
+        const reproBtn = document.getElementById('btn-reprocess-transcription');
         if (nameEl) nameEl.textContent = state.videoFile.name;
         if (metaEl) {
             const sizeStr = window.VideoLoader?.formatSize(state.videoFile.size) || '';
-            metaEl.textContent = `${sizeStr} · ${state.videoFile.path || '(caminho desconhecido)'}`;
+            const parts = [sizeStr];
+            if (state.transcriptMeta?.format === 'whisper') {
+                parts.push(state.transcriptMeta.fromCache
+                    ? `📁 cache · ${state.transcriptMeta.count} seg`
+                    : `✨ Whisper · ${state.transcriptMeta.count} seg`);
+            }
+            metaEl.innerHTML = parts.map(p => escapeHtml(p)).join(' · ');
+        }
+        // Mostra botão "Reprocessar" apenas se temos transcrição whisper em cache
+        if (reproBtn) {
+            reproBtn.style.display = state.transcriptMeta?.format === 'whisper' ? '' : 'none';
         }
     }
 
@@ -100,9 +114,22 @@
         document.querySelectorAll('input[name="tr-source"]').forEach(r => {
             r.addEventListener('change', () => {
                 const val = document.querySelector('input[name="tr-source"]:checked').value;
+                const prev = state.transcriptSource;
                 state.transcriptSource = val;
                 const manualBox = document.getElementById('manual-transcript-box');
                 if (manualBox) manualBox.classList.toggle('hidden', val !== 'manual');
+                // Trocar a fonte invalida a transcrição anterior (se veio de outra fonte)
+                if (prev && prev !== val) {
+                    const wasWhisper = state.transcriptMeta?.format === 'whisper';
+                    const isNowManual = val === 'manual';
+                    if ((wasWhisper && isNowManual) || (!wasWhisper && !isNowManual)) {
+                        state.transcript = null;
+                        state.transcriptSegments = null;
+                        state.transcriptMeta = null;
+                        renderVideoInfo();
+                        renderTranscriptInfo();
+                    }
+                }
                 updateStartButton();
             });
         });
@@ -598,7 +625,7 @@
         return startLegacyExtraction(opts);
     }
 
-    async function runWhisperTranscription() {
+    async function runWhisperTranscription(forceRefresh) {
         if (!state.videoFile || !state.videoFile.path) {
             toast('Arraste um vídeo antes de transcrever', 'warn');
             return false;
@@ -618,9 +645,11 @@
             const result = await window.AudioTranscriber.transcribe({
                 videoPath: state.videoFile.path,
                 apiKey: openaiKey,
+                forceRefresh: !!forceRefresh,
                 onProgress: (label, pct) => showProgress(true, label, pct)
             });
-            console.log('[FASTVIDEO] Whisper retornou', result.segments?.length, 'segments');
+            const fromCache = result.fromCache;
+            console.log('[FASTVIDEO] Whisper retornou', result.segments?.length, 'segments, fromCache=', fromCache);
             state.transcript = (result.segments || []).map(s => {
                 const m = Math.floor(s.start / 60), sec = Math.floor(s.start % 60);
                 return `[${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}] ${s.text}`;
@@ -630,9 +659,14 @@
                 format: 'whisper',
                 count: result.segments.length,
                 sourceName: state.videoFile.name,
-                sourceVideoPath: state.videoFile.path
+                sourceVideoPath: state.videoFile.path,
+                fromCache
             };
-            toast(`✓ ${result.segments.length} segmentos transcritos via Whisper`, 'success');
+            renderVideoInfo();
+            const msg = fromCache
+                ? `✓ ${result.segments.length} segmentos (cache local)`
+                : `✓ ${result.segments.length} segmentos transcritos via Whisper`;
+            toast(msg, 'success');
             return true;
         } catch (e) {
             showProgress(false);
@@ -640,6 +674,15 @@
             toast('Erro na transcrição: ' + e.message, 'error');
             return false;
         }
+    }
+
+    // Botão "Reprocessar transcrição" — força nova chamada ao Whisper
+    async function reprocessTranscription() {
+        if (!state.videoFile) return toast('Nenhum vídeo carregado', 'warn');
+        state.transcriptSegments = null;
+        state.transcriptMeta = null;
+        await runWhisperTranscription(true);
+        updateStartButton();
     }
 
     async function startSpeechExtraction(opts) {
@@ -665,6 +708,12 @@
         }
 
         const candidatesMap = new Map(candidates.map(c => [c.id, c]));
+
+        // Persiste em state para reprocessamento por card
+        state.lastCandidates = candidates;
+        state.candidatesMap = candidatesMap;
+        state.lastBrief = opts.brief;
+        state.lastOpts = opts;
 
         showProgress(true, 'Enviando para IA…', 55);
         try {
@@ -711,6 +760,12 @@
         }
 
         const blocksMap = new Map(blocks.map(b => [b.id, b]));
+
+        // Persiste em state para reprocessamento por card
+        state.lastBlocks = blocks;
+        state.blocksMap = blocksMap;
+        state.lastBrief = opts.brief;
+        state.lastOpts = opts;
 
         showProgress(true, 'Enviando para IA…', 55);
         try {
@@ -789,6 +844,16 @@
 
         results.classList.remove('hidden');
         results.scrollIntoView({ behavior: 'smooth' });
+        wireCardActions();
+    }
+
+    function renderCardActions(idx) {
+        return `<div class="card-actions">
+            <button class="link-btn" data-action="refine" data-idx="${idx}" title="Melhorar este corte">✨ Melhorar</button>
+            <button class="link-btn" data-action="new-hook" data-idx="${idx}" title="Buscar outro gancho">🎣 Novo gancho</button>
+            <button class="link-btn" data-action="variation" data-idx="${idx}" title="Criar uma variação">🔀 Variação</button>
+            <button class="link-btn muted-link" data-action="discard" data-idx="${idx}" title="Descartar">🗑</button>
+        </div>`;
     }
 
     function renderSpeechCard(item, idx) {
@@ -805,6 +870,7 @@
                 <div class="result-reason">${escapeHtml(item.reason || '')}</div>
                 <details class="speech-text-details"><summary>Ver texto completo</summary><div class="speech-text">${escapeHtml(item.text || '')}</div></details>
                 ${renderAiMeta(item)}
+                ${renderCardActions(idx)}
             </div>`;
         return card;
     }
@@ -834,8 +900,118 @@
                 <div class="narrative-clips">${clipsHtml}</div>
                 <div class="result-reason">${escapeHtml(video.reason || '')}</div>
                 ${renderAiMeta(video)}
+                ${renderCardActions(idx)}
             </div>`;
         return card;
+    }
+
+    // ==================== CARD ACTIONS (v1.9) ====================
+    function wireCardActions() {
+        const list = document.getElementById('results-list');
+        if (!list || list._wiredActions) return;
+        list._wiredActions = true;
+        list.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            const idx = parseInt(btn.dataset.idx, 10);
+            if (isNaN(idx)) return;
+            await handleCardAction(action, idx, btn);
+        });
+    }
+
+    async function handleCardAction(action, idx, btn) {
+        if (!state.results) return;
+        const mode = state.results.mode;
+
+        // Descartar: remove imediatamente
+        if (action === 'discard') {
+            if (mode === 'speech') state.results.selected.splice(idx, 1);
+            else if (mode === 'narrative') state.results.videos.splice(idx, 1);
+            renderResults();
+            return;
+        }
+
+        // Ações de IA exigem candidates/blocks em memória
+        if (mode === 'speech' && (!state.lastCandidates || !state.candidatesMap)) {
+            return toast('Candidatos não disponíveis — refaça a análise', 'warn');
+        }
+        if (mode === 'narrative' && (!state.lastBlocks || !state.blocksMap)) {
+            return toast('Blocos não disponíveis — refaça a análise', 'warn');
+        }
+
+        const provider = Providers.get(state.providerId);
+        const providerConfig = Storage.getProviders()[state.providerId];
+        if (!providerConfig?.apiKey) return toast('Provider sem API key', 'error');
+
+        // Desabilita todos os botões do card durante o reprocessamento
+        const card = btn.closest('.result-card');
+        const allBtns = card?.querySelectorAll('button[data-action]') || [];
+        allBtns.forEach(b => b.disabled = true);
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '⏳ reprocessando…';
+
+        try {
+            if (mode === 'speech') {
+                if (typeof provider.refineSpeechItem !== 'function') {
+                    throw new Error('Provider ' + state.providerId + ' não suporta reprocessamento — use Claude');
+                }
+                const current = state.results.selected[idx];
+                const alternatives = Engines.findSpeechAlternatives
+                    ? Engines.findSpeechAlternatives(current, state.lastCandidates, action)
+                    : state.lastCandidates.filter(c => c.id !== current.candidate_id).slice(0, 12);
+
+                console.log('[FASTVIDEO] refineSpeechItem:', action, '| current:', current.candidate_id, '| alternatives:', alternatives.length);
+                const refined = await provider.refineSpeechItem({
+                    apiKey: providerConfig.apiKey,
+                    model: state.model,
+                    current,
+                    alternatives,
+                    candidatesMap: state.candidatesMap,
+                    action,
+                    brief: state.lastBrief || ''
+                });
+                if (!refined) throw new Error('Sem alternativa retornada');
+                if (refined.candidate_id === current.candidate_id) {
+                    toast('IA manteve o corte atual como melhor opção', 'info');
+                } else {
+                    state.results.selected[idx] = refined;
+                    renderResults();
+                    toast('✓ Card atualizado', 'success');
+                }
+            } else if (mode === 'narrative') {
+                if (typeof provider.refineNarrativeVideo !== 'function') {
+                    throw new Error('Provider ' + state.providerId + ' não suporta reprocessamento — use Claude');
+                }
+                const current = state.results.videos[idx];
+                const alternatives = Engines.findNarrativeAlternatives
+                    ? Engines.findNarrativeAlternatives(current, state.lastBlocks, action)
+                    : state.lastBlocks.slice(0, 20);
+
+                console.log('[FASTVIDEO] refineNarrativeVideo:', action, '| current:', current.id, '| alternatives:', alternatives.length);
+                const refined = await provider.refineNarrativeVideo({
+                    apiKey: providerConfig.apiKey,
+                    model: state.model,
+                    current,
+                    alternatives,
+                    blocksMap: state.blocksMap,
+                    action,
+                    brief: state.lastBrief || '',
+                    durMin: state.lastOpts?.durMin || 15,
+                    durMax: state.lastOpts?.durMax || 90
+                });
+                if (!refined) throw new Error('Sem alternativa retornada');
+                state.results.videos[idx] = refined;
+                renderResults();
+                toast('✓ Vídeo atualizado', 'success');
+            }
+        } catch (e) {
+            console.error('[FASTVIDEO] handleCardAction falhou:', e);
+            toast('Erro: ' + e.message, 'error');
+        } finally {
+            allBtns.forEach(b => b.disabled = false);
+            btn.innerHTML = originalHtml;
+        }
     }
 
     function scoreBadge(score) {

@@ -253,6 +253,63 @@ Analisar blocos pré-selecionados e montar vídeos com arco narrativo completo: 
         }
     };
 
+    // ==================== REFINE JSON SCHEMAS ====================
+
+    const SPEECH_REFINE_SELECTED_SCHEMA = {
+        type: 'object',
+        properties: {
+            candidate_id:  { type: 'string' },
+            score:         { type: 'number' },
+            label:         { type: 'string' },
+            headline:      { type: 'string' },
+            hook:          { type: 'string' },
+            reason:        { type: 'string' },
+            caption:       { type: 'string' },
+            onscreen_text: { type: 'string' }
+        },
+        required: ['candidate_id','score','label','headline','hook','reason','caption','onscreen_text'],
+        additionalProperties: false
+    };
+
+    const JSON_SCHEMA_SPEECH_REFINE = {
+        name: 'speech_refine_response',
+        strict: true,
+        schema: {
+            type: 'object',
+            properties: { selected: SPEECH_REFINE_SELECTED_SCHEMA },
+            required: ['selected'],
+            additionalProperties: false
+        }
+    };
+
+    const NARRATIVE_REFINE_VIDEO_SCHEMA = {
+        type: 'object',
+        properties: {
+            id:            { type: 'string' },
+            score:         { type: 'number' },
+            label:         { type: 'string' },
+            headline:      { type: 'string' },
+            hook:          { type: 'string' },
+            reason:        { type: 'string' },
+            caption:       { type: 'string' },
+            onscreen_text: { type: 'string' },
+            clips:         { type: 'array', items: NARRATIVE_CLIP_ITEM_SCHEMA }
+        },
+        required: ['id','score','label','headline','hook','reason','caption','onscreen_text','clips'],
+        additionalProperties: false
+    };
+
+    const JSON_SCHEMA_NARRATIVE_REFINE = {
+        name: 'narrative_refine_response',
+        strict: true,
+        schema: {
+            type: 'object',
+            properties: { video: NARRATIVE_REFINE_VIDEO_SCHEMA },
+            required: ['video'],
+            additionalProperties: false
+        }
+    };
+
     const JSON_SCHEMA_CONTINUOUS = {
         name: 'clips_response',
         strict: true,
@@ -449,6 +506,209 @@ FORMATO DE RESPOSTA (JSON puro, sem markdown):
     }
   ]
 }`;
+    }
+
+    // ==================== REFINE PROMPT BUILDERS ====================
+
+    const SPEECH_ACTION_DESC = {
+        'refine':    'Encontrar uma versão melhor deste trecho, com hook mais forte, fechamento mais claro ou maior aderência ao briefing.',
+        'new-hook':  'Encontrar um gancho/abertura diferente (start mais forte) mantendo a ideia central.',
+        'variation': 'Encontrar uma VARIAÇÃO sobre o mesmo tema, preferencialmente de outro momento do vídeo.'
+    };
+
+    const NARRATIVE_ACTION_DESC = {
+        'refine':    'Substituir ou reordenar blocks para melhorar a narrativa do vídeo.',
+        'new-hook':  'Trocar APENAS o primeiro bloco (role=hook) por um bloco com hook mais forte. Mantenha o resto.',
+        'variation': 'Monte uma variação sobre o mesmo tema, usando blocos diferentes sempre que possível.'
+    };
+
+    function buildSpeechRefinePrompt(current, alternatives, action, brief) {
+        const actionDesc = SPEECH_ACTION_DESC[action] || SPEECH_ACTION_DESC.refine;
+
+        const currentObj = {
+            id: current.id || current.candidate_id,
+            duration: Number((current.duration || 0).toFixed(1)),
+            hook: current.hook_score,
+            clarity: current.clarity_score,
+            density: current.density_score,
+            conclusion: current.conclusion_score,
+            keyword: current.keyword_score,
+            text: (current.text || '').slice(0, 200)
+        };
+
+        const altLines = (alternatives || []).map(c => {
+            const text = (c.text || '').slice(0, 200);
+            return `  {"candidate_id":"${c.id}","dur":${(c.duration || 0).toFixed(1)}s,"hook":${c.hook_score},"clarity":${c.clarity_score},"density":${c.density_score},"conclusion":${c.conclusion_score},"keyword":${c.keyword_score},"text":${JSON.stringify(text)}}`;
+        }).join(',\n');
+
+        return `BRIEFING: ${brief || '(sem briefing)'}
+
+AÇÃO SOLICITADA: ${actionDesc}
+
+CANDIDATE ATUAL:
+${JSON.stringify(currentObj)}
+
+ALTERNATIVAS:
+[
+${altLines}
+]
+
+Escolha UM candidate_id (pode ser o atual se for realmente o melhor) que atende melhor à ação solicitada.
+Retorne o objeto selected no formato schema.
+NUNCA invente candidate_id.
+
+FORMATO DE RESPOSTA (JSON puro, sem markdown):
+{
+  "selected": {
+    "candidate_id": "<id exato>",
+    "score": <0-10>,
+    "label": "nome curto",
+    "headline": "título chamativo máx 8 palavras",
+    "hook": "frase de abertura",
+    "reason": "por que este é o melhor para a ação solicitada",
+    "caption": "legenda redes sociais máx 150 chars",
+    "onscreen_text": "3-5 palavras para tela"
+  }
+}`;
+    }
+
+    function buildNarrativeRefinePrompt(current, alternatives, action, brief, durMin, durMax) {
+        const actionDesc = NARRATIVE_ACTION_DESC[action] || NARRATIVE_ACTION_DESC.refine;
+
+        const currentClips = (current.clips || []).map(c => ({
+            block_id: c.block_id,
+            role: c.role,
+            dur: Number((c.duration || 0).toFixed(1)),
+            text: (c.text || '').slice(0, 120)
+        }));
+        const currentObj = {
+            id: current.id,
+            total_duration: Number((current.totalDuration || 0).toFixed(1)),
+            score: current.score,
+            clips: currentClips
+        };
+
+        const altLines = (alternatives || []).map(b => {
+            const text = (b.text || '').slice(0, 100);
+            const roles = (b.role_candidates || []).join('|');
+            const tags = (b.topic_tags || []).join(',');
+            return `  {"id":"${b.id}","dur":${(b.duration || 0).toFixed(1)}s,"roles":"${roles}","tags":"${tags}","hook":${b.hook_score},"clarity":${b.clarity_score},"emotion":${b.emotion_score},"keyword":${b.keyword_score},"text":${JSON.stringify(text)}}`;
+        }).join(',\n');
+
+        return `BRIEFING: ${brief || '(sem briefing)'}
+
+AÇÃO SOLICITADA: ${actionDesc}
+
+DURAÇÃO TOTAL ALVO: entre ${durMin}s e ${durMax}s (soma dos blocks escolhidos).
+
+VIDEO ATUAL:
+${JSON.stringify(currentObj)}
+
+ALTERNATIVAS (blocks disponíveis):
+[
+${altLines}
+]
+
+Monte UM novo vídeo (ou modifique o atual) respeitando ${durMin}-${durMax}s.
+Os clips devem usar block_id das alternativas OU do video atual.
+NUNCA invente block_id. Use APENAS IDs que aparecem acima.
+
+FORMATO DE RESPOSTA (JSON puro, sem markdown):
+{
+  "video": {
+    "id": "${current.id || 'video_refined'}",
+    "score": <0-10>,
+    "label": "nome curto",
+    "headline": "título chamativo máx 8 palavras",
+    "hook": "frase de abertura",
+    "reason": "por que esta narrativa funciona",
+    "caption": "legenda redes sociais máx 150 chars",
+    "onscreen_text": "3-5 palavras para tela",
+    "clips": [
+      { "block_id": "<id exato>", "role": "hook|body|proof|contrast|context|payoff|cta" }
+    ]
+  }
+}`;
+    }
+
+    // ==================== REFINE RESOLVERS ====================
+
+    function resolveSpeechRefineResult(raw, candidatesMap) {
+        const sel = raw?.selected || (Array.isArray(raw) ? raw[0] : raw);
+        if (!sel || !sel.candidate_id) {
+            throw new Error('Resposta inválida: selected.candidate_id ausente');
+        }
+        if (!candidatesMap || !candidatesMap.has(sel.candidate_id)) {
+            throw new Error('candidate_id não encontrado: ' + sel.candidate_id);
+        }
+        const candidate = candidatesMap.get(sel.candidate_id);
+        const score = Number(sel.score);
+
+        const result = {
+            candidate_id:  sel.candidate_id,
+            start:         candidate.start,
+            end:           candidate.end,
+            duration:      candidate.duration,
+            text:          candidate.text,
+            segment_ids:   candidate.segment_ids,
+            score:         isFinite(score) ? score : 5,
+            label:         sel.label || '',
+            headline:      sel.headline || '',
+            hook:          sel.hook || '',
+            reason:        sel.reason || '',
+            caption:       sel.caption || '',
+            onscreen_text: sel.onscreen_text || ''
+        };
+        console.log('[FASTVIDEO] resolveSpeechRefineResult: resolvido candidate_id:', result.candidate_id);
+        return result;
+    }
+
+    function resolveNarrativeRefineResult(raw, blocksMap, opts) {
+        const v = raw?.video || raw;
+        if (!v || !Array.isArray(v.clips) || v.clips.length === 0) {
+            throw new Error('Resposta inválida: video.clips ausente ou vazio');
+        }
+
+        const durMin = (opts && opts.durMin) || 15;
+        const durMax = (opts && opts.durMax) || 90;
+
+        const resolvedClips = [];
+        for (const clip of v.clips) {
+            const bid = clip.block_id;
+            if (!bid || !blocksMap.has(bid)) {
+                throw new Error('block_id não encontrado: ' + bid);
+            }
+            const block = blocksMap.get(bid);
+            resolvedClips.push({
+                block_id: bid,
+                role:     clip.role || 'body',
+                start:    block.start,
+                end:      block.end,
+                duration: block.duration,
+                text:     block.text
+            });
+        }
+
+        const totalDur = resolvedClips.reduce((acc, c) => acc + c.duration, 0);
+        if (totalDur < durMin || totalDur > durMax) {
+            throw new Error(`Duração total ${totalDur.toFixed(1)}s fora da faixa [${durMin}, ${durMax}]`);
+        }
+
+        const score = Number(v.score);
+        const result = {
+            id:            v.id || (opts && opts.current && opts.current.id) || '',
+            score:         isFinite(score) ? score : 5,
+            label:         v.label || '',
+            headline:      v.headline || '',
+            hook:          v.hook || '',
+            reason:        v.reason || '',
+            caption:       v.caption || '',
+            onscreen_text: v.onscreen_text || '',
+            totalDuration: totalDur,
+            clips:         resolvedClips
+        };
+        console.log('[FASTVIDEO] resolveNarrativeRefineResult: resolvido, clips:', resolvedClips.length, 'dur:', totalDur.toFixed(1) + 's');
+        return result;
     }
 
     // ==================== HELPERS ====================
@@ -745,6 +1005,73 @@ FORMATO DE RESPOSTA (JSON puro, sem markdown):
             console.log('[FASTVIDEO] Anthropic createNarrativeVideos resposta bruta:', text.slice(0, 300));
             const raw = extractJSON(text);
             return window.Engines.validateNarrativeVideos(raw.videos || [], opts.blocksMap, opts);
+        },
+
+        async refineSpeechItem(opts) {
+            const userPrompt = buildSpeechRefinePrompt(opts.current, opts.alternatives || [], opts.action, opts.brief);
+            console.log('[FASTVIDEO] Anthropic refineSpeechItem: alternatives:', (opts.alternatives || []).length, 'action:', opts.action);
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': opts.apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: opts.model,
+                    max_tokens: 2048,
+                    temperature: 0.5,
+                    system: [{ type: 'text', text: SPEECH_SYSTEM_PROMPT_DEFAULT, cache_control: { type: 'ephemeral' } }],
+                    messages: [{ role: 'user', content: userPrompt }]
+                })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            const text = data.content?.[0]?.text || '';
+            console.log('[FASTVIDEO] Anthropic refineSpeechItem resposta bruta:', text.slice(0, 300));
+            const raw = extractJSON(text);
+            return resolveSpeechRefineResult(raw, opts.candidatesMap);
+        },
+
+        async refineNarrativeVideo(opts) {
+            const userPrompt = buildNarrativeRefinePrompt(
+                opts.current,
+                opts.alternatives || [],
+                opts.action,
+                opts.brief,
+                opts.durMin || 15,
+                opts.durMax || 90
+            );
+            console.log('[FASTVIDEO] Anthropic refineNarrativeVideo: alternatives:', (opts.alternatives || []).length, 'action:', opts.action);
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': opts.apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: opts.model,
+                    max_tokens: 2048,
+                    temperature: 0.5,
+                    system: [{ type: 'text', text: NARRATIVE_SYSTEM_PROMPT_DEFAULT, cache_control: { type: 'ephemeral' } }],
+                    messages: [{ role: 'user', content: userPrompt }]
+                })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            const text = data.content?.[0]?.text || '';
+            console.log('[FASTVIDEO] Anthropic refineNarrativeVideo resposta bruta:', text.slice(0, 300));
+            const raw = extractJSON(text);
+            return resolveNarrativeRefineResult(raw, opts.blocksMap, opts);
         }
     };
 
@@ -961,6 +1288,133 @@ FORMATO DE RESPOSTA (JSON puro, sem markdown):
             }
 
             return window.Engines.validateNarrativeVideos(raw.videos || [], opts.blocksMap, opts);
+        },
+
+        async refineSpeechItem(opts) {
+            const userPrompt = buildSpeechRefinePrompt(opts.current, opts.alternatives || [], opts.action, opts.brief);
+            console.log('[FASTVIDEO] OpenAI refineSpeechItem: alternatives:', (opts.alternatives || []).length, 'action:', opts.action);
+            const baseBody = {
+                model: opts.model,
+                max_tokens: 2048,
+                temperature: 0.5,
+                messages: [
+                    { role: 'system', content: SPEECH_SYSTEM_PROMPT_DEFAULT },
+                    { role: 'user', content: userPrompt }
+                ]
+            };
+
+            let raw = null;
+            try {
+                const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${opts.apiKey}` },
+                    body: JSON.stringify({ ...baseBody, response_format: { type: 'json_schema', json_schema: JSON_SCHEMA_SPEECH_REFINE } })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const choice = data.choices?.[0];
+                    if (choice?.finish_reason === 'content_filter' || choice?.message?.refusal) {
+                        throw new Error('Structured output recusado: ' + (choice.message?.refusal || 'content_filter'));
+                    }
+                    const text = choice?.message?.content || '';
+                    console.log('[FASTVIDEO] OpenAI refineSpeechItem Structured Outputs OK. Trecho:', text.slice(0, 200));
+                    raw = extractJSON(text);
+                } else if (res.status === 400) {
+                    const err = await res.json().catch(() => ({}));
+                    console.warn('[FASTVIDEO] refineSpeechItem json_schema não suportado (400):', err.error?.message, '— usando json_object');
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `HTTP ${res.status}`);
+                }
+            } catch (e) {
+                if (e.message.includes('HTTP') || e.message.includes('recusado')) throw e;
+                console.warn('[FASTVIDEO] refineSpeechItem Structured Outputs falhou:', e.message, '— usando json_object fallback');
+            }
+
+            if (raw === null) {
+                const res2 = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${opts.apiKey}` },
+                    body: JSON.stringify({ ...baseBody, response_format: { type: 'json_object' } })
+                });
+                if (!res2.ok) {
+                    const err = await res2.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `HTTP ${res2.status}`);
+                }
+                const data2 = await res2.json();
+                const text2 = data2.choices?.[0]?.message?.content || '';
+                console.log('[FASTVIDEO] OpenAI refineSpeechItem json_object fallback. Trecho:', text2.slice(0, 200));
+                raw = extractJSON(text2);
+            }
+
+            return resolveSpeechRefineResult(raw, opts.candidatesMap);
+        },
+
+        async refineNarrativeVideo(opts) {
+            const userPrompt = buildNarrativeRefinePrompt(
+                opts.current,
+                opts.alternatives || [],
+                opts.action,
+                opts.brief,
+                opts.durMin || 15,
+                opts.durMax || 90
+            );
+            console.log('[FASTVIDEO] OpenAI refineNarrativeVideo: alternatives:', (opts.alternatives || []).length, 'action:', opts.action);
+            const baseBody = {
+                model: opts.model,
+                max_tokens: 2048,
+                temperature: 0.5,
+                messages: [
+                    { role: 'system', content: NARRATIVE_SYSTEM_PROMPT_DEFAULT },
+                    { role: 'user', content: userPrompt }
+                ]
+            };
+
+            let raw = null;
+            try {
+                const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${opts.apiKey}` },
+                    body: JSON.stringify({ ...baseBody, response_format: { type: 'json_schema', json_schema: JSON_SCHEMA_NARRATIVE_REFINE } })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const choice = data.choices?.[0];
+                    if (choice?.finish_reason === 'content_filter' || choice?.message?.refusal) {
+                        throw new Error('Structured output recusado: ' + (choice.message?.refusal || 'content_filter'));
+                    }
+                    const text = choice?.message?.content || '';
+                    console.log('[FASTVIDEO] OpenAI refineNarrativeVideo Structured Outputs OK. Trecho:', text.slice(0, 200));
+                    raw = extractJSON(text);
+                } else if (res.status === 400) {
+                    const err = await res.json().catch(() => ({}));
+                    console.warn('[FASTVIDEO] refineNarrativeVideo json_schema não suportado (400):', err.error?.message, '— usando json_object');
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `HTTP ${res.status}`);
+                }
+            } catch (e) {
+                if (e.message.includes('HTTP') || e.message.includes('recusado')) throw e;
+                console.warn('[FASTVIDEO] refineNarrativeVideo Structured Outputs falhou:', e.message, '— usando json_object fallback');
+            }
+
+            if (raw === null) {
+                const res2 = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${opts.apiKey}` },
+                    body: JSON.stringify({ ...baseBody, response_format: { type: 'json_object' } })
+                });
+                if (!res2.ok) {
+                    const err = await res2.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `HTTP ${res2.status}`);
+                }
+                const data2 = await res2.json();
+                const text2 = data2.choices?.[0]?.message?.content || '';
+                console.log('[FASTVIDEO] OpenAI refineNarrativeVideo json_object fallback. Trecho:', text2.slice(0, 200));
+                raw = extractJSON(text2);
+            }
+
+            return resolveNarrativeRefineResult(raw, opts.blocksMap, opts);
         }
     };
 
@@ -1068,6 +1522,69 @@ FORMATO DE RESPOSTA (JSON puro, sem markdown):
             console.log('[FASTVIDEO] Gemini createNarrativeVideos resposta bruta:', text.slice(0, 300));
             const raw = extractJSON(text);
             return window.Engines.validateNarrativeVideos(raw.videos || [], opts.blocksMap, opts);
+        },
+
+        async refineSpeechItem(opts) {
+            const userPrompt = buildSpeechRefinePrompt(opts.current, opts.alternatives || [], opts.action, opts.brief);
+            console.log('[FASTVIDEO] Gemini refineSpeechItem: alternatives:', (opts.alternatives || []).length, 'action:', opts.action);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent?key=${opts.apiKey}`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    systemInstruction: { parts: [{ text: SPEECH_SYSTEM_PROMPT_DEFAULT }] },
+                    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                    generationConfig: {
+                        responseMimeType: 'application/json',
+                        maxOutputTokens: 2048,
+                        temperature: 0.5
+                    }
+                })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            console.log('[FASTVIDEO] Gemini refineSpeechItem resposta bruta:', text.slice(0, 300));
+            const raw = extractJSON(text);
+            return resolveSpeechRefineResult(raw, opts.candidatesMap);
+        },
+
+        async refineNarrativeVideo(opts) {
+            const userPrompt = buildNarrativeRefinePrompt(
+                opts.current,
+                opts.alternatives || [],
+                opts.action,
+                opts.brief,
+                opts.durMin || 15,
+                opts.durMax || 90
+            );
+            console.log('[FASTVIDEO] Gemini refineNarrativeVideo: alternatives:', (opts.alternatives || []).length, 'action:', opts.action);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent?key=${opts.apiKey}`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    systemInstruction: { parts: [{ text: NARRATIVE_SYSTEM_PROMPT_DEFAULT }] },
+                    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                    generationConfig: {
+                        responseMimeType: 'application/json',
+                        maxOutputTokens: 2048,
+                        temperature: 0.5
+                    }
+                })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            console.log('[FASTVIDEO] Gemini refineNarrativeVideo resposta bruta:', text.slice(0, 300));
+            const raw = extractJSON(text);
+            return resolveNarrativeRefineResult(raw, opts.blocksMap, opts);
         }
     };
 

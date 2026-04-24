@@ -473,13 +473,203 @@
         return valid;
     }
 
+    // ==================== REFINE HELPERS ====================
+
+    const combinedSpeechScore = (c) => {
+        const h = Number(c.hook_score) || 0;
+        const cl = Number(c.clarity_score) || 0;
+        const d = Number(c.density_score) || 0;
+        const co = Number(c.conclusion_score) || 0;
+        const kw = Number(c.keyword_score) || 0;
+        return (h + cl + d + co + kw) / 5;
+    };
+
+    const combinedBlockScore = (b) => {
+        const h = Number(b.hook_score) || 0;
+        const cl = Number(b.clarity_score) || 0;
+        const e = Number(b.emotion_score) || 0;
+        const kw = Number(b.keyword_score) || 0;
+        return (h + cl + e + kw) / 4;
+    };
+
+    const temporalOverlapRatio = (a, b) => {
+        const overlapStart = Math.max(a.start, b.start);
+        const overlapEnd = Math.min(a.end, b.end);
+        const overlap = Math.max(0, overlapEnd - overlapStart);
+        const minDur = Math.min(a.duration || (a.end - a.start), b.duration || (b.end - b.start));
+        if (!minDur || minDur <= 0) return 0;
+        return overlap / minDur;
+    };
+
+    const shareSegmentIds = (a, b) => {
+        const sa = new Set(a.segment_ids || []);
+        for (const id of (b.segment_ids || [])) {
+            if (sa.has(id)) return true;
+        }
+        return false;
+    };
+
+    const tagsOverlapCount = (tagsA, tagsB) => {
+        if (!tagsA || !tagsB) return 0;
+        const setA = new Set(tagsA);
+        let n = 0;
+        for (const t of tagsB) if (setA.has(t)) n++;
+        return n;
+    };
+
+    function findSpeechAlternatives(currentCandidate, allCandidates, action, topN = 12) {
+        if (!currentCandidate || !Array.isArray(allCandidates)) {
+            console.warn('[FASTVIDEO] findSpeechAlternatives: argumentos inválidos');
+            return [];
+        }
+
+        const pool = allCandidates.filter(c => c && c.id !== currentCandidate.id);
+        const sortedByScore = [...pool].sort((a, b) => combinedSpeechScore(b) - combinedSpeechScore(a));
+
+        let filtered = [];
+
+        if (action === 'refine') {
+            filtered = pool.filter(c => {
+                const overlap = temporalOverlapRatio(currentCandidate, c);
+                const shared = shareSegmentIds(currentCandidate, c);
+                return overlap > 0.3 || shared;
+            });
+            filtered.sort((a, b) => combinedSpeechScore(b) - combinedSpeechScore(a));
+        } else if (action === 'new-hook') {
+            filtered = pool.filter(c => {
+                return Math.abs(c.end - currentCandidate.end) < 10 && c.start < currentCandidate.start;
+            });
+            if (filtered.length === 0) {
+                filtered = pool.filter(c =>
+                    Math.abs(c.start - currentCandidate.start) < 20 &&
+                    (Number(c.hook_score) || 0) >= 6
+                );
+            }
+            filtered.sort((a, b) => (Number(b.hook_score) || 0) - (Number(a.hook_score) || 0));
+        } else if (action === 'variation') {
+            const currentTags = extractTopicTags(currentCandidate.text || '');
+            const withOverlap = [];
+            const highScoreNoOverlap = [];
+            for (const c of pool) {
+                const cTags = extractTopicTags(c.text || '');
+                const overlap = tagsOverlapCount(currentTags, cTags);
+                const temporal = temporalOverlapRatio(currentCandidate, c);
+                if (overlap >= 1) {
+                    withOverlap.push({ c, overlap });
+                } else if (temporal === 0 && combinedSpeechScore(c) >= 5) {
+                    highScoreNoOverlap.push(c);
+                }
+            }
+            withOverlap.sort((a, b) => {
+                if (b.overlap !== a.overlap) return b.overlap - a.overlap;
+                return combinedSpeechScore(b.c) - combinedSpeechScore(a.c);
+            });
+            highScoreNoOverlap.sort((a, b) => combinedSpeechScore(b) - combinedSpeechScore(a));
+            const seen = new Set();
+            filtered = [];
+            for (const entry of withOverlap) {
+                if (!seen.has(entry.c.id)) { seen.add(entry.c.id); filtered.push(entry.c); }
+            }
+            for (const c of highScoreNoOverlap) {
+                if (!seen.has(c.id)) { seen.add(c.id); filtered.push(c); }
+            }
+        } else {
+            console.warn('[FASTVIDEO] findSpeechAlternatives: action desconhecida:', action);
+            filtered = sortedByScore;
+        }
+
+        if (filtered.length === 0) {
+            console.log('[FASTVIDEO] findSpeechAlternatives: fallback (action:', action + ')');
+            return sortedByScore.slice(0, topN);
+        }
+
+        const result = filtered.slice(0, topN);
+        console.log('[FASTVIDEO] findSpeechAlternatives: action=' + action, 'encontradas:', result.length);
+        return result;
+    }
+
+    function findNarrativeAlternatives(currentVideo, allBlocks, action, topN = 20) {
+        if (!currentVideo || !Array.isArray(allBlocks)) {
+            console.warn('[FASTVIDEO] findNarrativeAlternatives: argumentos inválidos');
+            return [];
+        }
+
+        const usedIds = new Set((currentVideo.clips || []).map(c => c.block_id).filter(Boolean));
+        const pool = allBlocks.filter(b => b && !usedIds.has(b.id));
+        const sortedByScore = [...pool].sort((a, b) => combinedBlockScore(b) - combinedBlockScore(a));
+
+        let filtered = [];
+
+        if (action === 'refine') {
+            const usedTags = new Set();
+            for (const clip of (currentVideo.clips || [])) {
+                const src = clip.topic_tags || extractTopicTags(clip.text || '');
+                for (const t of src) usedTags.add(t);
+            }
+            filtered = pool.filter(b => {
+                const tags = b.topic_tags || [];
+                for (const t of tags) if (usedTags.has(t)) return true;
+                return false;
+            });
+            filtered.sort((a, b) => combinedBlockScore(b) - combinedBlockScore(a));
+        } else if (action === 'new-hook') {
+            filtered = pool.filter(b =>
+                Array.isArray(b.role_candidates) &&
+                b.role_candidates.includes('hook') &&
+                (Number(b.hook_score) || 0) >= 6
+            );
+            filtered.sort((a, b) => (Number(b.hook_score) || 0) - (Number(a.hook_score) || 0));
+        } else if (action === 'variation') {
+            const usedTags = new Set();
+            for (const clip of (currentVideo.clips || [])) {
+                const src = clip.topic_tags || extractTopicTags(clip.text || '');
+                for (const t of src) usedTags.add(t);
+            }
+            const withOverlap = [];
+            const payoffCta = [];
+            for (const b of pool) {
+                const tags = b.topic_tags || [];
+                let hasOverlap = false;
+                for (const t of tags) if (usedTags.has(t)) { hasOverlap = true; break; }
+                if (hasOverlap) withOverlap.push(b);
+                const roles = b.role_candidates || [];
+                if (roles.includes('payoff') || roles.includes('cta')) payoffCta.push(b);
+            }
+            withOverlap.sort((a, b) => combinedBlockScore(b) - combinedBlockScore(a));
+            payoffCta.sort((a, b) => combinedBlockScore(b) - combinedBlockScore(a));
+            const seen = new Set();
+            filtered = [];
+            for (const b of withOverlap) {
+                if (!seen.has(b.id)) { seen.add(b.id); filtered.push(b); }
+            }
+            for (const b of payoffCta) {
+                if (!seen.has(b.id)) { seen.add(b.id); filtered.push(b); }
+            }
+        } else {
+            console.warn('[FASTVIDEO] findNarrativeAlternatives: action desconhecida:', action);
+            filtered = sortedByScore;
+        }
+
+        if (filtered.length === 0) {
+            console.log('[FASTVIDEO] findNarrativeAlternatives: fallback (action:', action + ')');
+            return sortedByScore.slice(0, topN);
+        }
+
+        filtered.sort((a, b) => combinedBlockScore(b) - combinedBlockScore(a));
+        const result = filtered.slice(0, topN);
+        console.log('[FASTVIDEO] findNarrativeAlternatives: action=' + action, 'encontradas:', result.length);
+        return result;
+    }
+
     // ==================== EXPORT ====================
 
     window.Engines = {
         buildFullSpeechCandidates,
         buildNarrativeBlocks,
         validateSpeechSelection,
-        validateNarrativeVideos
+        validateNarrativeVideos,
+        findSpeechAlternatives,
+        findNarrativeAlternatives
     };
 
 })();

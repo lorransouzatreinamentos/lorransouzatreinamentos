@@ -14,6 +14,7 @@
     const fs = require('fs');
     const path = require('path');
     const os = require('os');
+    const crypto = require('crypto');
     const { exec } = require('child_process');
 
     const WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
@@ -21,8 +22,84 @@
     const CHUNK_SECONDS = 900; // 15 minutos
     const EXEC_MAX_BUFFER = 50 * 1024 * 1024; // 50MB para stdout/stderr do ffmpeg
 
+    // Cache persistente em disco
+    const CACHE_VERSION = 1;
+    const CACHE_DIR = path.join(os.homedir(), '.fastvideo-cache');
+
     // Cache do path do ffmpeg por sessão
     let ffmpegPathCache = undefined; // undefined = não procurado ainda; null = procurou e não achou
+
+    const ensureCacheDir = () => {
+        try {
+            if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} cache: não foi possível criar diretório:`, e.message);
+        }
+    };
+
+    const cacheKeyFor = (videoPath, stats) => {
+        const h = crypto.createHash('md5');
+        h.update(`${videoPath}|${stats.size}|${stats.mtimeMs || stats.mtime.getTime()}`);
+        return h.digest('hex');
+    };
+
+    const readCacheEntry = (key) => {
+        try {
+            const f = path.join(CACHE_DIR, `${key}.json`);
+            if (!fs.existsSync(f)) return null;
+            const data = JSON.parse(fs.readFileSync(f, 'utf8'));
+            if (data.version !== CACHE_VERSION) return null;
+            if (!Array.isArray(data.segments) || !data.segments.length) return null;
+            console.log(`${LOG_PREFIX} cache HIT: ${key} (${data.segments.length} segments, criado ${new Date(data.createdAt).toISOString()})`);
+            return data;
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} readCache falhou:`, e.message);
+            return null;
+        }
+    };
+
+    const writeCacheEntry = (key, data) => {
+        try {
+            ensureCacheDir();
+            const f = path.join(CACHE_DIR, `${key}.json`);
+            fs.writeFileSync(f, JSON.stringify({
+                version: CACHE_VERSION,
+                createdAt: Date.now(),
+                ...data
+            }));
+            console.log(`${LOG_PREFIX} cache escrito: ${key}`);
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} writeCache falhou:`, e.message);
+        }
+    };
+
+    const clearCache = () => {
+        try {
+            if (!fs.existsSync(CACHE_DIR)) return 0;
+            const files = fs.readdirSync(CACHE_DIR).filter(f => f.endsWith('.json'));
+            files.forEach(f => { try { fs.unlinkSync(path.join(CACHE_DIR, f)); } catch (_) {} });
+            console.log(`${LOG_PREFIX} cache limpo: ${files.length} arquivos removidos`);
+            return files.length;
+        } catch (e) {
+            console.warn(`${LOG_PREFIX} clearCache falhou:`, e.message);
+            return 0;
+        }
+    };
+
+    const listCache = () => {
+        try {
+            if (!fs.existsSync(CACHE_DIR)) return [];
+            return fs.readdirSync(CACHE_DIR)
+                .filter(f => f.endsWith('.json'))
+                .map(f => {
+                    try {
+                        const data = JSON.parse(fs.readFileSync(path.join(CACHE_DIR, f), 'utf8'));
+                        return { key: f.replace('.json', ''), createdAt: data.createdAt, segments: data.segments?.length || 0 };
+                    } catch (_) { return null; }
+                })
+                .filter(Boolean);
+        } catch (_) { return []; }
+    };
 
     /**
      * Executa um comando shell e retorna Promise<{stdout, stderr}>.
@@ -343,7 +420,34 @@
         const sizeMB = (stats.size / (1024 * 1024)).toFixed(2);
         console.log(`${LOG_PREFIX} arquivo: ${sizeMB}MB`);
 
+        // CACHE: tenta recuperar transcrição anterior para o mesmo vídeo
+        const key = cacheKeyFor(videoPath, stats);
+        if (!opts.forceRefresh) {
+            const cached = readCacheEntry(key);
+            if (cached) {
+                onProgress('Usando transcrição em cache', 100);
+                return {
+                    text: cached.text,
+                    segments: cached.segments,
+                    fromAudioExtraction: !!cached.fromAudioExtraction,
+                    fromCache: true
+                };
+            }
+        } else {
+            console.log(`${LOG_PREFIX} forceRefresh=true, ignorando cache`);
+        }
+
         const tempFiles = [];
+
+        // Salva o resultado no cache antes de retornar
+        const saveAndReturn = (result) => {
+            writeCacheEntry(key, {
+                text: result.text,
+                segments: result.segments,
+                fromAudioExtraction: result.fromAudioExtraction
+            });
+            return { ...result, fromCache: false };
+        };
 
         try {
             // Caminho simples: envia direto
@@ -351,11 +455,11 @@
                 onProgress('Enviando para Whisper…', 50);
                 const result = await uploadToWhisper(videoPath, apiKey);
                 onProgress('Transcrição concluída', 100);
-                return {
+                return saveAndReturn({
                     text: result.text,
                     segments: result.segments,
                     fromAudioExtraction: false
-                };
+                });
             }
 
             // Caminho com extração de áudio
@@ -381,11 +485,11 @@
                 onProgress('Enviando para Whisper…', 60);
                 const result = await uploadToWhisper(audioPath, apiKey);
                 onProgress('Transcrição concluída', 100);
-                return {
+                return saveAndReturn({
                     text: result.text,
                     segments: result.segments,
                     fromAudioExtraction: true
-                };
+                });
             }
 
             // Áudio ainda grande — divide em chunks
@@ -412,11 +516,11 @@
             const merged = mergeChunkResults(results);
             onProgress('Transcrição concluída', 100);
 
-            return {
+            return saveAndReturn({
                 text: merged.text,
                 segments: merged.segments,
                 fromAudioExtraction: true
-            };
+            });
         } catch (err) {
             // Preserva mensagens já formatadas; caso contrário, embrulha
             const msg = err && err.message ? err.message : String(err);
@@ -434,6 +538,8 @@
 
     window.AudioTranscriber = {
         transcribe,
-        findFFmpeg
+        findFFmpeg,
+        clearCache,
+        listCache
     };
 })();
