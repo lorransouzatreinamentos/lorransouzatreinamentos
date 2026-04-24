@@ -429,6 +429,7 @@
             state.providerId = pid;
             state.model = mid;
             Storage.savePreferences({ ...prefs, lastSelection: select.value, defaultProvider: pid, lastModel: mid });
+            updateStartButton();
         };
         if (select.value) {
             const [pid, mid] = select.value.split('::');
@@ -543,7 +544,7 @@
         card.className = 'result-card';
         const total = (variation.clips || []).reduce((s, c) => s + (c.end - c.start), 0);
         const clipsHtml = (variation.clips || []).map(c =>
-            `<div class="result-clip-item">[${(c.role || '').toUpperCase().padEnd(5)}] ${fmt(c.start)}→${fmt(c.end)} · ${escapeHtml((c.text || '').slice(0, 50))}</div>`
+            `<div class="result-clip-item">[${escapeHtml(String(c.role || '').toUpperCase().padEnd(5))}] ${fmt(c.start)}→${fmt(c.end)} · ${escapeHtml((c.text || '').slice(0, 50))}</div>`
         ).join('');
         card.innerHTML = `
             <input type="checkbox" data-idx="${idx}" checked>
