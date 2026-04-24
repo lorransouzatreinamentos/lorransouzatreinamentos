@@ -280,6 +280,20 @@
                 document.getElementById('append-remaining-line').style.display = isEdit ? 'none' : '';
             });
         });
+
+        // Atualiza nota de inserção conforme modo de extração
+        document.querySelectorAll('input[name="mode"]').forEach(r => {
+            r.addEventListener('change', () => {
+                const mode = r.value;
+                const note = document.querySelector('.insert-note');
+                if (note) {
+                    if (mode === 'speech') note.textContent = '✨ Cada fala vira um vídeo separado na timeline, com cor diferente e gap de 30s.';
+                    else if (mode === 'narrative') note.textContent = '✨ Cada vídeo criado é um grupo de cortes com a mesma cor. Gap de 30s entre vídeos.';
+                    else if (mode === 'compilation') note.textContent = '✨ Cada variação é um grupo com cor única, gap 30s entre grupos.';
+                    else note.textContent = '✨ Cada trecho com cor diferente, gap 30s entre trechos.';
+                }
+            });
+        });
     }
 
     function resetAll() {
@@ -297,7 +311,7 @@
         document.getElementById('prompt').value = '';
 
         // Config (volta aos defaults)
-        document.querySelector('input[name="mode"][value="continuous"]').checked = true;
+        document.querySelector('input[name="mode"][value="speech"]').checked = true;
         document.getElementById('dur-min').value = 30;
         document.getElementById('dur-max').value = 90;
         document.getElementById('max-count').checked = false;
@@ -456,17 +470,123 @@
     }
 
     // ==================== EXTRACTION ====================
-    async function startExtraction() {
+
+    function getExtractionOpts() {
         const prompt = document.getElementById('prompt').value.trim();
-        const mode = document.querySelector('input[name="mode"]:checked').value;
+        const mode   = document.querySelector('input[name="mode"]:checked').value;
         const durMin = parseInt(document.getElementById('dur-min').value, 10);
         const durMax = parseInt(document.getElementById('dur-max').value, 10);
-        const isMax = document.getElementById('max-count').checked;
-        const count = isMax ? 999 : parseInt(document.getElementById('count').value, 10);
+        const isMax  = document.getElementById('max-count').checked;
+        const count  = isMax ? 999 : parseInt(document.getElementById('count').value, 10);
+        return { brief: prompt, mode, durMin, durMax, count, maxMode: isMax };
+    }
 
-        if (durMin >= durMax) return toast('Duração mínima deve ser menor que máxima', 'warn');
+    async function startExtraction() {
+        const opts = getExtractionOpts();
+        if (opts.durMin >= opts.durMax) return toast('Duração mínima deve ser menor que máxima', 'warn');
 
-        console.log('[FASTVIDEO] Iniciando extração — modo:', mode, '| segmentos:', state.transcriptSegments?.length, '| modelo:', state.model);
+        console.log('[FASTVIDEO] Iniciando extração — modo:', opts.mode, '| segmentos:', state.transcriptSegments?.length, '| modelo:', state.model);
+
+        if (opts.mode === 'speech')    return startSpeechExtraction(opts);
+        if (opts.mode === 'narrative') return startNarrativeExtraction(opts);
+        return startLegacyExtraction(opts);
+    }
+
+    async function startSpeechExtraction(opts) {
+        const segments = state.transcriptSegments;
+        if (!segments || segments.length < 4) {
+            return toast('Transcrição insuficiente para gerar candidatos', 'warn');
+        }
+
+        showProgress(true, 'Gerando candidatos de fala…', 20);
+        let candidates;
+        try {
+            candidates = Engines.buildFullSpeechCandidates(segments, opts);
+        } catch (e) {
+            showProgress(false);
+            console.error('[FASTVIDEO] Erro ao gerar candidatos:', e);
+            return toast('Erro ao gerar candidatos: ' + e.message, 'error');
+        }
+
+        console.log('[FASTVIDEO] Candidatos gerados:', candidates.length);
+        if (candidates.length < 2) {
+            showProgress(false);
+            return toast(`Poucos candidatos (${candidates.length}) — ajuste duração mín/máx ou transcrição`, 'warn');
+        }
+
+        const candidatesMap = new Map(candidates.map(c => [c.id, c]));
+
+        showProgress(true, 'Enviando para IA…', 55);
+        try {
+            const provider = Providers.get(state.providerId);
+            const providerConfig = Storage.getProviders()[state.providerId];
+            const selected = await provider.extractFullSpeech({
+                apiKey: providerConfig.apiKey,
+                model: state.model,
+                candidates,
+                candidatesMap,
+                brief: opts.brief,
+                count: opts.count,
+                maxMode: opts.maxMode
+            });
+            state.results = { mode: 'speech', selected };
+            showProgress(true, 'Pronto!', 100);
+            setTimeout(() => { showProgress(false); renderResults(); }, 400);
+        } catch (err) {
+            showProgress(false);
+            toast('Erro: ' + err.message, 'error');
+        }
+    }
+
+    async function startNarrativeExtraction(opts) {
+        const segments = state.transcriptSegments;
+        if (!segments || segments.length < 4) {
+            return toast('Transcrição insuficiente para gerar blocos', 'warn');
+        }
+
+        showProgress(true, 'Gerando blocos narrativos…', 20);
+        let blocks;
+        try {
+            blocks = Engines.buildNarrativeBlocks(segments, opts);
+        } catch (e) {
+            showProgress(false);
+            console.error('[FASTVIDEO] Erro ao gerar blocos:', e);
+            return toast('Erro ao gerar blocos: ' + e.message, 'error');
+        }
+
+        console.log('[FASTVIDEO] Blocos gerados:', blocks.length);
+        if (blocks.length < 4) {
+            showProgress(false);
+            return toast(`Poucos blocos (${blocks.length}) — verifique a transcrição`, 'warn');
+        }
+
+        const blocksMap = new Map(blocks.map(b => [b.id, b]));
+
+        showProgress(true, 'Enviando para IA…', 55);
+        try {
+            const provider = Providers.get(state.providerId);
+            const providerConfig = Storage.getProviders()[state.providerId];
+            const videos = await provider.createNarrativeVideos({
+                apiKey: providerConfig.apiKey,
+                model: state.model,
+                blocks,
+                blocksMap,
+                brief: opts.brief,
+                count: opts.count,
+                durMin: opts.durMin,
+                durMax: opts.durMax,
+                maxMode: opts.maxMode
+            });
+            state.results = { mode: 'narrative', videos };
+            showProgress(true, 'Pronto!', 100);
+            setTimeout(() => { showProgress(false); renderResults(); }, 400);
+        } catch (err) {
+            showProgress(false);
+            toast('Erro: ' + err.message, 'error');
+        }
+    }
+
+    async function startLegacyExtraction(opts) {
         showProgress(true, 'Enviando para IA…', 30);
         try {
             const provider = Providers.get(state.providerId);
@@ -476,12 +596,12 @@
                 model: state.model,
                 transcript: state.transcript,
                 segments: state.transcriptSegments,
-                brief: prompt,
-                mode, durMin, durMax, count,
-                maxMode: isMax,
+                brief: opts.brief,
+                mode: opts.mode, durMin: opts.durMin, durMax: opts.durMax, count: opts.count,
+                maxMode: opts.maxMode,
                 durationSeconds: state.projectItem?.durationSeconds || null
             });
-            state.results = { ...result, mode };
+            state.results = { ...result, mode: opts.mode };
             showProgress(true, 'Pronto!', 100);
             setTimeout(() => { showProgress(false); renderResults(); }, 400);
         } catch (err) {
@@ -495,13 +615,77 @@
         const list = document.getElementById('results-list');
         const results = document.getElementById('results');
         list.innerHTML = '';
-        if (state.results.mode === 'compilation') {
+
+        const mode = state.results.mode;
+        if (mode === 'speech') {
+            const items = state.results.selected || [];
+            if (!items.length) {
+                list.innerHTML = '<p class="note">Nenhuma fala encontrada com score ≥ 5. Tente ajustar o briefing ou as durações.</p>';
+            } else {
+                items.forEach((item, idx) => list.appendChild(renderSpeechCard(item, idx)));
+            }
+        } else if (mode === 'narrative') {
+            const videos = state.results.videos || [];
+            if (!videos.length) {
+                list.innerHTML = '<p class="note">Nenhum vídeo gerado com score ≥ 5. Tente ajustar o briefing ou as durações.</p>';
+            } else {
+                videos.forEach((video, idx) => list.appendChild(renderNarrativeCard(video, idx)));
+            }
+        } else if (mode === 'compilation') {
             (state.results.variations || []).forEach((v, idx) => list.appendChild(renderVariationCard(v, idx)));
         } else {
             (state.results.clips || []).forEach((c, idx) => list.appendChild(renderClipCard(c, idx)));
         }
+
         results.classList.remove('hidden');
         results.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function renderSpeechCard(item, idx) {
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        card.innerHTML = `
+            <input type="checkbox" data-idx="${idx}" checked>
+            <div class="result-body">
+                <div class="result-label-row">
+                    <div class="result-label">${escapeHtml(item.label || 'Fala ' + (idx + 1))}<span class="candidate-id-badge">${escapeHtml(item.candidate_id || '')}</span></div>
+                    ${scoreBadge(item.score)}
+                </div>
+                <div class="result-timestamp">${fmt(item.start)} → ${fmt(item.end)} (${(item.duration || (item.end - item.start)).toFixed(1)}s)</div>
+                <div class="result-reason">${escapeHtml(item.reason || '')}</div>
+                <details class="speech-text-details"><summary>Ver texto completo</summary><div class="speech-text">${escapeHtml(item.text || '')}</div></details>
+                ${renderAiMeta(item)}
+            </div>`;
+        return card;
+    }
+
+    const ROLE_LABELS = { hook: 'Gancho', body: 'Desenv.', context: 'Contexto', proof: 'Exemplo', contrast: 'Contraste', payoff: 'Fechamento', cta: 'CTA' };
+
+    function renderNarrativeCard(video, idx) {
+        const card = document.createElement('div');
+        card.className = 'result-card';
+        const total = video.totalDuration || (video.clips || []).reduce((s, c) => s + (c.duration || (c.end - c.start)), 0);
+        const clipsHtml = (video.clips || []).map(c => {
+            const roleLabel = ROLE_LABELS[c.role] || c.role;
+            return `<div class="narrative-clip">
+                <span class="role-badge role-${escapeHtml(c.role || 'body')}">${escapeHtml(roleLabel)}</span>
+                <span class="clip-time">${fmt(c.start)}→${fmt(c.end)}</span>
+                <span class="clip-text">${escapeHtml((c.text || '').slice(0, 55))}…</span>
+            </div>`;
+        }).join('');
+        card.innerHTML = `
+            <input type="checkbox" data-idx="${idx}" checked>
+            <div class="result-body">
+                <div class="result-label-row">
+                    <div class="result-label">${escapeHtml(video.label || 'Vídeo ' + (idx + 1))}</div>
+                    ${scoreBadge(video.score)}
+                </div>
+                <div class="result-timestamp">${total.toFixed(1)}s total · ${(video.clips || []).length} cortes</div>
+                <div class="narrative-clips">${clipsHtml}</div>
+                <div class="result-reason">${escapeHtml(video.reason || '')}</div>
+                ${renderAiMeta(video)}
+            </div>`;
+        return card;
     }
 
     function scoreBadge(score) {
@@ -583,9 +767,24 @@
         };
 
         let invalidCount = 0;
+        const mode = state.results.mode;
+
         checked.forEach(cb => {
             const idx = parseInt(cb.dataset.idx, 10);
-            if (state.results.mode === 'compilation') {
+
+            if (mode === 'speech') {
+                // Cada fala selecionada → clip contínuo individual
+                const item = state.results.selected[idx];
+                const clean = sanitize(item);
+                if (clean) payload.items.push(clean);
+                else invalidCount++;
+            } else if (mode === 'narrative') {
+                // Cada vídeo narrativo → grupo de clips (igual à compilation no host)
+                const video = state.results.videos[idx];
+                const cleanClips = (video.clips || []).map(sanitize).filter(Boolean);
+                if (cleanClips.length >= 2) payload.items.push({ label: video.label, clips: cleanClips });
+                else invalidCount++;
+            } else if (mode === 'compilation') {
                 const v = state.results.variations[idx];
                 const cleanClips = (v.clips || []).map(sanitize).filter(Boolean);
                 if (cleanClips.length) payload.items.push({ label: v.label, clips: cleanClips });
@@ -596,6 +795,10 @@
                 else invalidCount++;
             }
         });
+
+        // Mapeia speech → continuous e narrative → compilation para o host
+        if (mode === 'speech')    payload.mode = 'continuous';
+        if (mode === 'narrative') payload.mode = 'compilation';
 
         if (!payload.items.length) {
             return toast('Nenhum trecho válido para inserir (timestamps inválidos)', 'error');

@@ -70,6 +70,60 @@ Para cada trecho/variação, além dos timestamps, gere:
 4. Zero sobreposição de timestamps entre variações diferentes.
 5. FORMATO DE RESPOSTA: JSON puro. Nenhum texto antes ou depois. Sem markdown.`;
 
+    // ==================== SPEECH SYSTEM PROMPT ====================
+
+    const SPEECH_SYSTEM_PROMPT_DEFAULT = `Você é um EDITOR DE VÍDEO SÊNIOR especializado em identificar FALAS COMPLETAS e AUTOSSUFICIENTES para redes sociais (TikTok, Reels, YouTube Shorts).
+
+══════════════════ SEU PAPEL ══════════════════
+
+Analisar candidatos pré-selecionados e escolher os melhores trechos de fala completa. Cada trecho deve funcionar de forma independente, com hook claro, desenvolvimento e conclusão.
+
+══════════════════ CRITÉRIOS DE SELEÇÃO ══════════════════
+
+Priorize candidatos com:
+  [1] HOOK POWER alto — os primeiros segundos capturam atenção instantaneamente
+  [2] CONCLUSÃO FORTE — o trecho termina de forma satisfatória, não no meio da ideia
+  [3] AUTOSSUFICIÊNCIA — funciona 100% sem contexto externo
+  [4] DENSIDADE — alto valor informacional, sem enchimento
+  [5] IDENTIFICAÇÃO — o espectador se vê na situação
+
+Score mínimo: 5. NÃO inclua candidatos com score abaixo de 5.
+
+══════════════════ REGRAS ABSOLUTAS ══════════════════
+
+1. Retorne APENAS candidate_id da lista fornecida. NUNCA invente IDs.
+2. NUNCA crie ou modifique timestamps — o sistema resolve automaticamente.
+3. FORMATO DE RESPOSTA: JSON puro. Nenhum texto antes ou depois. Sem markdown.
+4. Use os scores de hook_score e conclusion_score como critérios primários de seleção.`;
+
+    // ==================== NARRATIVE SYSTEM PROMPT ====================
+
+    const NARRATIVE_SYSTEM_PROMPT_DEFAULT = `Você é um EDITOR CRIATIVO especializado em montar vídeos com narrativa forte para redes sociais (TikTok, Reels, YouTube Shorts).
+
+══════════════════ SEU PAPEL ══════════════════
+
+Analisar blocos pré-selecionados e montar vídeos com arco narrativo completo: Hook → Desenvolvimento → Fechamento. Você pode combinar blocos de momentos diferentes da transcrição.
+
+══════════════════ ESTRUTURA NARRATIVA OBRIGATÓRIA ══════════════════
+
+  1. HOOK (role: hook) — Bloco que captura atenção nos primeiros segundos
+  2. DESENVOLVIMENTO (role: body/proof/contrast/context) — Blocos que desenvolvem a ideia
+  3. FECHAMENTO (role: payoff/cta) — Bloco que conclui com insight ou chamada à ação
+
+══════════════════ CRITÉRIOS DE SELEÇÃO ══════════════════
+
+  [1] Combine blocos que se complementam tematicamente (use topic_tags como guia)
+  [2] Priorize blocos com hook_score alto para abertura
+  [3] Priorize blocos com role_candidates contendo 'payoff' ou 'cta' para fechamento
+  [4] Respeite a duração total alvo informada no prompt
+  [5] Score mínimo por vídeo: 5
+
+══════════════════ REGRAS ABSOLUTAS ══════════════════
+
+1. Retorne APENAS block_id da lista fornecida. NUNCA invente IDs.
+2. NUNCA crie ou modifique timestamps — o sistema resolve automaticamente.
+3. FORMATO DE RESPOSTA: JSON puro. Nenhum texto antes ou depois. Sem markdown.`;
+
     const SYSTEM_PROMPT_KEY = 'fastvideo:systemPrompt';
 
     function getSystemPrompt() {
@@ -128,6 +182,75 @@ Para cada trecho/variação, além dos timestamps, gere:
         },
         required: ['label','score','headline','hook','caption','onscreen_text','clips'],
         additionalProperties: false
+    };
+
+    // ==================== SPEECH JSON SCHEMA (Structured Outputs) ====================
+
+    const SPEECH_SELECTED_ITEM_SCHEMA = {
+        type: 'object',
+        properties: {
+            candidate_id:  { type: 'string' },
+            score:         { type: 'number' },
+            label:         { type: 'string' },
+            headline:      { type: 'string' },
+            hook:          { type: 'string' },
+            reason:        { type: 'string' },
+            caption:       { type: 'string' },
+            onscreen_text: { type: 'string' }
+        },
+        required: ['candidate_id','score','label','headline','hook','reason','caption','onscreen_text'],
+        additionalProperties: false
+    };
+
+    const JSON_SCHEMA_SPEECH = {
+        name: 'speech_response',
+        strict: true,
+        schema: {
+            type: 'object',
+            properties: { selected: { type: 'array', items: SPEECH_SELECTED_ITEM_SCHEMA } },
+            required: ['selected'],
+            additionalProperties: false
+        }
+    };
+
+    // ==================== NARRATIVE JSON SCHEMA (Structured Outputs) ====================
+
+    const NARRATIVE_CLIP_ITEM_SCHEMA = {
+        type: 'object',
+        properties: {
+            block_id: { type: 'string' },
+            role:     { type: 'string' }
+        },
+        required: ['block_id','role'],
+        additionalProperties: false
+    };
+
+    const NARRATIVE_VIDEO_ITEM_SCHEMA = {
+        type: 'object',
+        properties: {
+            id:            { type: 'string' },
+            score:         { type: 'number' },
+            label:         { type: 'string' },
+            headline:      { type: 'string' },
+            hook:          { type: 'string' },
+            reason:        { type: 'string' },
+            caption:       { type: 'string' },
+            onscreen_text: { type: 'string' },
+            clips:         { type: 'array', items: NARRATIVE_CLIP_ITEM_SCHEMA }
+        },
+        required: ['id','score','label','headline','hook','reason','caption','onscreen_text','clips'],
+        additionalProperties: false
+    };
+
+    const JSON_SCHEMA_NARRATIVE = {
+        name: 'narrative_response',
+        strict: true,
+        schema: {
+            type: 'object',
+            properties: { videos: { type: 'array', items: NARRATIVE_VIDEO_ITEM_SCHEMA } },
+            required: ['videos'],
+            additionalProperties: false
+        }
     };
 
     const JSON_SCHEMA_CONTINUOUS = {
@@ -233,6 +356,99 @@ ${durationLine}
 ${modeBlock}
 
 ${transcriptBlock}`;
+    }
+
+    // ==================== SPEECH PROMPT BUILDER ====================
+
+    function buildSpeechUserPrompt(candidates, brief, count) {
+        const quantity = count > 0
+            ? `Escolha no máximo ${count} candidatos da lista abaixo.`
+            : 'Escolha todos os candidatos que atendam aos critérios (score ≥ 5).';
+
+        const candidateLines = candidates.map(c => {
+            const text = (c.text || '').slice(0, 200);
+            return `  {"candidate_id":"${c.id}","dur":${c.duration.toFixed(1)}s,"hook":${c.hook_score},"clarity":${c.clarity_score},"conclusion":${c.conclusion_score},"keyword":${c.keyword_score},"text":${JSON.stringify(text)}}`;
+        }).join(',\n');
+
+        return `BRIEFING DO CRIADOR:
+${brief || '(sem briefing)'}
+
+${quantity}
+NUNCA invente candidate_id. Use APENAS os IDs desta lista. O sistema resolve timestamps automaticamente.
+
+CANDIDATOS DISPONÍVEIS:
+[
+${candidateLines}
+]
+
+FORMATO DE RESPOSTA (JSON puro, sem markdown):
+{
+  "selected": [
+    {
+      "candidate_id": "<id exato da lista acima>",
+      "score": <0-10>,
+      "label": "nome curto",
+      "headline": "título chamativo máx 8 palavras",
+      "hook": "frase de abertura do trecho",
+      "reason": "por que este trecho viraliza",
+      "caption": "legenda redes sociais máx 150 chars",
+      "onscreen_text": "3-5 palavras para tela"
+    }
+  ]
+}`;
+    }
+
+    // ==================== NARRATIVE PROMPT BUILDER ====================
+
+    function buildNarrativeUserPrompt(blocks, brief, count, durMin, durMax) {
+        const quantity = count > 0
+            ? `Crie até ${count} vídeos com narrativa forte.`
+            : 'Crie todos os vídeos possíveis que atendam aos critérios.';
+
+        const blockLines = blocks.map(b => {
+            const text = (b.text || '').slice(0, 100);
+            const roles = (b.role_candidates || []).join('|');
+            const tags  = (b.topic_tags || []).join(',');
+            return `  {"id":"${b.id}","dur":${b.duration.toFixed(1)}s,"roles":"${roles}","tags":"${tags}","hook":${b.hook_score},"clarity":${b.clarity_score},"emotion":${b.emotion_score},"keyword":${b.keyword_score},"text":${JSON.stringify(text)}}`;
+        }).join(',\n');
+
+        return `BRIEFING DO CRIADOR:
+${brief || '(sem briefing)'}
+
+DURAÇÃO ALVO POR VÍDEO: entre ${durMin}s e ${durMax}s (soma real dos blocos escolhidos).
+
+${quantity}
+REGRAS DE COMBINAÇÃO:
+  • Comece sempre com um bloco de role "hook" (hook_score mais alto disponível)
+  • Finalize com bloco de role "payoff" ou "cta" quando disponível
+  • Blocos de momentos diferentes da transcrição podem ser combinados
+  • Use topic_tags para garantir coerência temática entre blocos
+  • NUNCA invente block_id. Use APENAS os IDs desta lista.
+  • O sistema calcula duração real e timestamps automaticamente.
+
+BLOCOS DISPONÍVEIS:
+[
+${blockLines}
+]
+
+FORMATO DE RESPOSTA (JSON puro, sem markdown):
+{
+  "videos": [
+    {
+      "id": "video_001",
+      "score": <0-10>,
+      "label": "nome curto do vídeo",
+      "headline": "título chamativo máx 8 palavras",
+      "hook": "frase de abertura do vídeo",
+      "reason": "por que esta narrativa funciona",
+      "caption": "legenda redes sociais máx 150 chars",
+      "onscreen_text": "3-5 palavras para tela",
+      "clips": [
+        { "block_id": "<id exato da lista>", "role": "hook|body|proof|contrast|context|payoff|cta" }
+      ]
+    }
+  ]
+}`;
     }
 
     // ==================== HELPERS ====================
@@ -465,6 +681,70 @@ ${transcriptBlock}`;
             console.log('[FASTVIDEO] Anthropic resposta bruta:', text.slice(0, 300));
             const raw = extractJSON(text);
             return validateAndNormalize(raw, opts.mode, opts.segments);
+        },
+
+        async extractFullSpeech(opts) {
+            const userPrompt = buildSpeechUserPrompt(opts.candidates || [], opts.brief, opts.count || 0);
+            console.log('[FASTVIDEO] Anthropic extractFullSpeech: candidatos enviados:', (opts.candidates || []).length);
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': opts.apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: opts.model,
+                    max_tokens: opts.maxMode ? 8192 : 4096,
+                    temperature: 0.3,
+                    system: [
+                        { type: 'text', text: SPEECH_SYSTEM_PROMPT_DEFAULT, cache_control: { type: 'ephemeral' } }
+                    ],
+                    messages: [{ role: 'user', content: userPrompt }]
+                })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            const text = data.content?.[0]?.text || '';
+            console.log('[FASTVIDEO] Anthropic extractFullSpeech resposta bruta:', text.slice(0, 300));
+            const raw = extractJSON(text);
+            return window.Engines.validateSpeechSelection(raw.selected || [], opts.candidatesMap);
+        },
+
+        async createNarrativeVideos(opts) {
+            const userPrompt = buildNarrativeUserPrompt(opts.blocks || [], opts.brief, opts.count || 0, opts.durMin || 15, opts.durMax || 90);
+            console.log('[FASTVIDEO] Anthropic createNarrativeVideos: blocos enviados:', (opts.blocks || []).length);
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': opts.apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: opts.model,
+                    max_tokens: opts.maxMode ? 8192 : 4096,
+                    temperature: 0.3,
+                    system: [
+                        { type: 'text', text: NARRATIVE_SYSTEM_PROMPT_DEFAULT, cache_control: { type: 'ephemeral' } }
+                    ],
+                    messages: [{ role: 'user', content: userPrompt }]
+                })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            const text = data.content?.[0]?.text || '';
+            console.log('[FASTVIDEO] Anthropic createNarrativeVideos resposta bruta:', text.slice(0, 300));
+            const raw = extractJSON(text);
+            return window.Engines.validateNarrativeVideos(raw.videos || [], opts.blocksMap, opts);
         }
     };
 
@@ -561,6 +841,126 @@ ${transcriptBlock}`;
             }
 
             return validateAndNormalize(raw, opts.mode, opts.segments);
+        },
+
+        async extractFullSpeech(opts) {
+            const userPrompt = buildSpeechUserPrompt(opts.candidates || [], opts.brief, opts.count || 0);
+            console.log('[FASTVIDEO] OpenAI extractFullSpeech: candidatos enviados:', (opts.candidates || []).length);
+            const baseBody = {
+                model: opts.model,
+                max_tokens: opts.maxMode ? 8192 : 4096,
+                temperature: 0.3,
+                messages: [
+                    { role: 'system', content: SPEECH_SYSTEM_PROMPT_DEFAULT },
+                    { role: 'user', content: userPrompt }
+                ]
+            };
+
+            let raw = null;
+            try {
+                const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${opts.apiKey}` },
+                    body: JSON.stringify({ ...baseBody, response_format: { type: 'json_schema', json_schema: JSON_SCHEMA_SPEECH } })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const choice = data.choices?.[0];
+                    if (choice?.finish_reason === 'content_filter' || choice?.message?.refusal) {
+                        throw new Error('Structured output recusado: ' + (choice.message?.refusal || 'content_filter'));
+                    }
+                    const text = choice?.message?.content || '';
+                    console.log('[FASTVIDEO] OpenAI extractFullSpeech Structured Outputs OK. Trecho:', text.slice(0, 200));
+                    raw = extractJSON(text);
+                } else if (res.status === 400) {
+                    const err = await res.json().catch(() => ({}));
+                    console.warn('[FASTVIDEO] extractFullSpeech json_schema não suportado (400):', err.error?.message, '— usando json_object');
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `HTTP ${res.status}`);
+                }
+            } catch (e) {
+                if (e.message.includes('HTTP') || e.message.includes('recusado')) throw e;
+                console.warn('[FASTVIDEO] extractFullSpeech Structured Outputs falhou:', e.message, '— usando json_object fallback');
+            }
+
+            if (raw === null) {
+                const res2 = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${opts.apiKey}` },
+                    body: JSON.stringify({ ...baseBody, response_format: { type: 'json_object' } })
+                });
+                if (!res2.ok) {
+                    const err = await res2.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `HTTP ${res2.status}`);
+                }
+                const data2 = await res2.json();
+                const text2 = data2.choices?.[0]?.message?.content || '';
+                console.log('[FASTVIDEO] OpenAI extractFullSpeech json_object fallback. Trecho:', text2.slice(0, 200));
+                raw = extractJSON(text2);
+            }
+
+            return window.Engines.validateSpeechSelection(raw.selected || [], opts.candidatesMap);
+        },
+
+        async createNarrativeVideos(opts) {
+            const userPrompt = buildNarrativeUserPrompt(opts.blocks || [], opts.brief, opts.count || 0, opts.durMin || 15, opts.durMax || 90);
+            console.log('[FASTVIDEO] OpenAI createNarrativeVideos: blocos enviados:', (opts.blocks || []).length);
+            const baseBody = {
+                model: opts.model,
+                max_tokens: opts.maxMode ? 8192 : 4096,
+                temperature: 0.3,
+                messages: [
+                    { role: 'system', content: NARRATIVE_SYSTEM_PROMPT_DEFAULT },
+                    { role: 'user', content: userPrompt }
+                ]
+            };
+
+            let raw = null;
+            try {
+                const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${opts.apiKey}` },
+                    body: JSON.stringify({ ...baseBody, response_format: { type: 'json_schema', json_schema: JSON_SCHEMA_NARRATIVE } })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const choice = data.choices?.[0];
+                    if (choice?.finish_reason === 'content_filter' || choice?.message?.refusal) {
+                        throw new Error('Structured output recusado: ' + (choice.message?.refusal || 'content_filter'));
+                    }
+                    const text = choice?.message?.content || '';
+                    console.log('[FASTVIDEO] OpenAI createNarrativeVideos Structured Outputs OK. Trecho:', text.slice(0, 200));
+                    raw = extractJSON(text);
+                } else if (res.status === 400) {
+                    const err = await res.json().catch(() => ({}));
+                    console.warn('[FASTVIDEO] createNarrativeVideos json_schema não suportado (400):', err.error?.message, '— usando json_object');
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `HTTP ${res.status}`);
+                }
+            } catch (e) {
+                if (e.message.includes('HTTP') || e.message.includes('recusado')) throw e;
+                console.warn('[FASTVIDEO] createNarrativeVideos Structured Outputs falhou:', e.message, '— usando json_object fallback');
+            }
+
+            if (raw === null) {
+                const res2 = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${opts.apiKey}` },
+                    body: JSON.stringify({ ...baseBody, response_format: { type: 'json_object' } })
+                });
+                if (!res2.ok) {
+                    const err = await res2.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `HTTP ${res2.status}`);
+                }
+                const data2 = await res2.json();
+                const text2 = data2.choices?.[0]?.message?.content || '';
+                console.log('[FASTVIDEO] OpenAI createNarrativeVideos json_object fallback. Trecho:', text2.slice(0, 200));
+                raw = extractJSON(text2);
+            }
+
+            return window.Engines.validateNarrativeVideos(raw.videos || [], opts.blocksMap, opts);
         }
     };
 
@@ -612,6 +1012,62 @@ ${transcriptBlock}`;
             console.log('[FASTVIDEO] Gemini resposta bruta:', text.slice(0, 300));
             const raw = extractJSON(text);
             return validateAndNormalize(raw, opts.mode, opts.segments);
+        },
+
+        async extractFullSpeech(opts) {
+            const userPrompt = buildSpeechUserPrompt(opts.candidates || [], opts.brief, opts.count || 0);
+            console.log('[FASTVIDEO] Gemini extractFullSpeech: candidatos enviados:', (opts.candidates || []).length);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent?key=${opts.apiKey}`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    systemInstruction: { parts: [{ text: SPEECH_SYSTEM_PROMPT_DEFAULT }] },
+                    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                    generationConfig: {
+                        responseMimeType: 'application/json',
+                        maxOutputTokens: opts.maxMode ? 8192 : 4096,
+                        temperature: 0.3
+                    }
+                })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            console.log('[FASTVIDEO] Gemini extractFullSpeech resposta bruta:', text.slice(0, 300));
+            const raw = extractJSON(text);
+            return window.Engines.validateSpeechSelection(raw.selected || [], opts.candidatesMap);
+        },
+
+        async createNarrativeVideos(opts) {
+            const userPrompt = buildNarrativeUserPrompt(opts.blocks || [], opts.brief, opts.count || 0, opts.durMin || 15, opts.durMax || 90);
+            console.log('[FASTVIDEO] Gemini createNarrativeVideos: blocos enviados:', (opts.blocks || []).length);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent?key=${opts.apiKey}`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    systemInstruction: { parts: [{ text: NARRATIVE_SYSTEM_PROMPT_DEFAULT }] },
+                    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+                    generationConfig: {
+                        responseMimeType: 'application/json',
+                        maxOutputTokens: opts.maxMode ? 8192 : 4096,
+                        temperature: 0.3
+                    }
+                })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            console.log('[FASTVIDEO] Gemini createNarrativeVideos resposta bruta:', text.slice(0, 300));
+            const raw = extractJSON(text);
+            return window.Engines.validateNarrativeVideos(raw.videos || [], opts.blocksMap, opts);
         }
     };
 
@@ -645,6 +1101,9 @@ ${transcriptBlock}`;
         setSystemPrompt,
         resetSystemPrompt,
         defaultSystemPrompt: SYSTEM_PROMPT_DEFAULT,
+
+        speechSystemPrompt: SPEECH_SYSTEM_PROMPT_DEFAULT,
+        narrativeSystemPrompt: NARRATIVE_SYSTEM_PROMPT_DEFAULT,
 
         _validateAndNormalize: validateAndNormalize,
         _snapToSegmentBoundary: snapToSegmentBoundary

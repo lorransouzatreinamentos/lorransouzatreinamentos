@@ -102,17 +102,17 @@
                     <label>Modo de extração</label>
                     <div class="radio-group">
                         <label class="radio-option">
-                            <input type="radio" name="mode" value="continuous" checked>
+                            <input type="radio" name="mode" value="speech" checked>
                             <div class="radio-body">
-                                <div class="radio-title">Trecho contínuo</div>
-                                <div class="radio-desc">Uma janela fechada, sem cortes internos</div>
+                                <div class="radio-title">Extrair falas inteiras</div>
+                                <div class="radio-desc">Encontra trechos completos e contínuos, sem cortes internos</div>
                             </div>
                         </label>
                         <label class="radio-option">
-                            <input type="radio" name="mode" value="compilation">
+                            <input type="radio" name="mode" value="narrative">
                             <div class="radio-body">
-                                <div class="radio-title">Compilação (multi-cut)</div>
-                                <div class="radio-desc">Monta vídeo costurando trechos de momentos diferentes</div>
+                                <div class="radio-title">Criar vídeos com cortes</div>
+                                <div class="radio-desc">Combina falas de momentos diferentes para montar vídeos com gancho, desenvolvimento e fechamento</div>
                             </div>
                         </label>
                     </div>
@@ -480,6 +480,7 @@
     <script src="js/CSInterface.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/transcript-parser.js"></script>
+    <script src="js/engines.js"></script>
     <script src="js/providers.js"></script>
     <script src="js/templates.js"></script>
     <script src="js/main.js"></script>

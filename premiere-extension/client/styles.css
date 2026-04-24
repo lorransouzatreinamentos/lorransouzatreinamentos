@@ -1128,6 +1128,100 @@ select {
     margin-top: 4px;
 }
 
+/* ==================== SPEECH CARD (Motor 1) ==================== */
+.speech-text-details {
+    margin-top: 6px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.speech-text-details summary {
+    font-size: 11px;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 3px 0;
+    user-select: none;
+    list-style: none;
+}
+
+.speech-text-details summary::before { content: '▸ '; font-size: 9px; }
+.speech-text-details[open] summary::before { content: '▾ '; }
+
+.speech-text-details[open] {
+    background: var(--bg-2);
+    padding: 4px 8px 6px;
+    border: 1px solid var(--border);
+}
+
+.speech-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin-top: 4px;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+/* ==================== NARRATIVE CARD (Motor 2) ==================== */
+.narrative-clips {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.narrative-clip {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 11px;
+}
+
+.role-badge {
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 5px;
+    border-radius: 3px;
+    color: #fff;
+    background: var(--bg-3);
+}
+
+.role-badge.role-hook    { background: #7c3aed; }
+.role-badge.role-body    { background: #1565c0; }
+.role-badge.role-context { background: #00695c; }
+.role-badge.role-proof   { background: #2e7d32; }
+.role-badge.role-contrast{ background: #e65100; }
+.role-badge.role-payoff  { background: #c62828; }
+.role-badge.role-cta     { background: #6a1b9a; }
+
+.clip-time {
+    flex-shrink: 0;
+    font-family: Monaco, Consolas, monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.clip-text {
+    color: var(--text-muted);
+    font-size: 11px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+
+/* ==================== CANDIDATE DEBUG BADGE ==================== */
+.candidate-id-badge {
+    font-size: 9px;
+    font-family: Monaco, Consolas, monospace;
+    color: var(--text-muted);
+    opacity: 0.6;
+    margin-left: 4px;
+}
+
 /* Utils */
 .hidden { display: none !important; }
 .actions { display: flex; flex-direction: column; gap: 8px; }
