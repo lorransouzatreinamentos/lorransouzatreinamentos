@@ -1,17 +1,16 @@
 /**
- * FASTVIDEO — main controller.
- * Fluxo: selecionar clipe → carregar transcrição (arquivo/paste) →
- *        briefing → provider IA → inserção timeline.
+ * FASTVIDEO — main controller v1.2.
  */
 (function() {
     const cs = new CSInterface();
     const state = {
-        projectItem: null,   // { name, path, nodeId, durationSeconds }
-        transcript: null,    // string normalizada "[mm:ss] texto..."
-        transcriptMeta: null,// { format, segments, sourceName }
+        projectItem: null,
+        transcript: null,
+        transcriptMeta: null,
         results: null,
         providerId: 'anthropic',
-        model: 'claude-sonnet-4-6'
+        model: 'claude-sonnet-4-6',
+        availableClips: []
     };
 
     document.addEventListener('DOMContentLoaded', init);
@@ -20,12 +19,16 @@
         loadProviders();
         refreshModelDropdown();
         wireNav();
-        wireMainView();
+        wireClipPicker();
         wireTranscript();
+        wireCountToggle();
+        wireActions();
         wireSettings();
         wireTemplates();
         wireModals();
         refreshTemplatesUI();
+        // Carrega clipes automaticamente ao abrir
+        setTimeout(loadClipsFromProject, 300);
     }
 
     // ==================== NAV ====================
@@ -41,7 +44,247 @@
         document.getElementById('view-' + id).classList.add('active');
     }
 
-    // ==================== SETTINGS ====================
+    // ==================== CLIP PICKER (bug #1 fix) ====================
+    function wireClipPicker() {
+        document.getElementById('btn-refresh-clips').onclick = loadClipsFromProject;
+        document.getElementById('btn-use-selected').onclick = useSelectedFromPremiere;
+        document.getElementById('clip-dropdown').onchange = (e) => {
+            const nodeId = e.target.value;
+            if (!nodeId) {
+                state.projectItem = null;
+                renderClipInfo();
+                updateStartButton();
+                return;
+            }
+            const clip = state.availableClips.find(c => String(c.nodeId) === String(nodeId));
+            if (clip) {
+                state.projectItem = clip;
+                renderClipInfo();
+                updateStartButton();
+            }
+        };
+    }
+
+    async function loadClipsFromProject() {
+        try {
+            const res = await evalHost('CC.listProjectClips()');
+            if (!res.ok) {
+                document.getElementById('clip-dropdown').innerHTML = '<option value="">— ' + (res.error || 'sem clipes') + ' —</option>';
+                return;
+            }
+            state.availableClips = res.clips || [];
+            renderClipDropdown(res.selectedNodeId);
+            toast(`${state.availableClips.length} clipe(s) carregado(s)`, 'success');
+        } catch (e) {
+            toast('Erro ao listar clipes: ' + e.message, 'error');
+        }
+    }
+
+    function renderClipDropdown(preselectNodeId) {
+        const dd = document.getElementById('clip-dropdown');
+        dd.innerHTML = '';
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '— Selecione um vídeo —';
+        dd.appendChild(placeholder);
+
+        state.availableClips.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.nodeId;
+            const mins = Math.floor((c.durationSeconds || 0) / 60);
+            const secs = Math.floor((c.durationSeconds || 0) % 60);
+            opt.textContent = `${c.name} (${mins}:${secs.toString().padStart(2, '0')})`;
+            dd.appendChild(opt);
+        });
+
+        if (preselectNodeId) {
+            dd.value = preselectNodeId;
+            const clip = state.availableClips.find(c => String(c.nodeId) === String(preselectNodeId));
+            if (clip) {
+                state.projectItem = clip;
+                renderClipInfo();
+                updateStartButton();
+            }
+        }
+    }
+
+    async function useSelectedFromPremiere() {
+        try {
+            const res = await evalHost('CC.listProjectClips()');
+            if (!res.ok || !res.selectedNodeId) {
+                return toast('Nenhum clipe selecionado no Project panel do Premiere', 'warn');
+            }
+            state.availableClips = res.clips;
+            document.getElementById('clip-dropdown').value = res.selectedNodeId;
+            const clip = state.availableClips.find(c => String(c.nodeId) === String(res.selectedNodeId));
+            if (clip) {
+                state.projectItem = clip;
+                renderClipInfo();
+                updateStartButton();
+                toast(`"${clip.name}" selecionado`, 'success');
+            }
+        } catch (e) {
+            toast('Erro: ' + e.message, 'error');
+        }
+    }
+
+    function renderClipInfo() {
+        const info = document.getElementById('clip-info');
+        if (!state.projectItem) return info.classList.add('hidden');
+        info.classList.remove('hidden');
+        document.getElementById('clip-name').textContent = state.projectItem.name;
+        const dur = state.projectItem.durationSeconds || 0;
+        const mins = Math.floor(dur / 60);
+        const secs = Math.floor(dur % 60);
+        document.getElementById('clip-meta').textContent = `Duração: ${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    // ==================== TRANSCRIPT ====================
+    function wireTranscript() {
+        const dz = document.getElementById('dropzone-tr');
+        const file = document.getElementById('file-tr');
+
+        dz.addEventListener('click', () => file.click());
+        dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+        dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+        dz.addEventListener('drop', e => {
+            e.preventDefault();
+            dz.classList.remove('dragover');
+            const f = e.dataTransfer.files[0];
+            if (f) readTranscriptFile(f);
+        });
+        file.addEventListener('change', e => {
+            if (e.target.files[0]) readTranscriptFile(e.target.files[0]);
+        });
+
+        // Bug #3 fix: paste sempre visível, botão funciona
+        document.getElementById('btn-use-paste').onclick = () => {
+            const text = document.getElementById('paste-tr').value;
+            if (!text || text.trim().length < 20) {
+                return toast('Cole pelo menos 20 caracteres de texto', 'warn');
+            }
+            processTranscript(text, 'texto colado');
+        };
+
+        document.getElementById('btn-auto-transcript').onclick = findAutoTranscript;
+
+        document.getElementById('btn-clear-tr').onclick = () => {
+            state.transcript = null;
+            state.transcriptMeta = null;
+            document.getElementById('tr-info').classList.add('hidden');
+            document.getElementById('dropzone-tr').classList.remove('hidden');
+            document.querySelector('.paste-area').classList.remove('hidden');
+            document.querySelector('#btn-auto-transcript').parentElement.classList.remove('hidden');
+            document.getElementById('paste-tr').value = '';
+            document.getElementById('file-tr').value = '';
+            updateStartButton();
+        };
+    }
+
+    function readTranscriptFile(file) {
+        const reader = new FileReader();
+        reader.onload = e => processTranscript(e.target.result, file.name);
+        reader.onerror = () => toast('Erro ao ler arquivo: ' + file.name, 'error');
+        // Força leitura como UTF-8 (resolve BOM e encoding de exports do Premiere)
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    function processTranscript(content, sourceName) {
+        try {
+            if (!content || content.length < 10) {
+                return toast('Arquivo vazio ou muito curto', 'error');
+            }
+            const dur = state.projectItem?.durationSeconds || null;
+            const result = TranscriptParser.parse(content, { durationSeconds: dur });
+            console.log('[FASTVIDEO] Parser result:', result);
+
+            if (!result.text || result.segments < 2) {
+                return toast(`Transcrição inválida (formato detectado: ${result.format}, ${result.segments} seg)`, 'error');
+            }
+            state.transcript = result.text;
+            state.transcriptMeta = { ...result, sourceName };
+            renderTranscriptInfo();
+            updateStartButton();
+            toast(`✓ ${result.segments} segmentos carregados (${result.format})`, 'success');
+        } catch (e) {
+            console.error('[FASTVIDEO] Parser error:', e);
+            toast('Erro ao processar: ' + e.message, 'error');
+        }
+    }
+
+    async function findAutoTranscript() {
+        if (!state.projectItem) {
+            return toast('Selecione um vídeo primeiro (Passo 1)', 'warn');
+        }
+        const btn = document.getElementById('btn-auto-transcript');
+        btn.disabled = true;
+        btn.textContent = '🔍 Buscando…';
+        try {
+            const res = await evalHost(`CC.findAutoTranscript(${JSON.stringify(state.projectItem.nodeId)})`);
+            if (!res.ok) {
+                toast(res.error, 'warn');
+                showManualTranscriptGuide();
+                return;
+            }
+            processTranscript(res.content, res.fileName);
+        } catch (e) {
+            toast('Erro: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔍 Buscar transcrição automática';
+        }
+    }
+
+    function showManualTranscriptGuide() {
+        showView('manual');
+        setTimeout(() => {
+            const firstStep = document.querySelector('#view-manual .manual-step:nth-child(2)');
+            if (firstStep) firstStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+    }
+
+    function renderTranscriptInfo() {
+        const info = document.getElementById('tr-info');
+        const dz = document.getElementById('dropzone-tr');
+        const paste = document.querySelector('.paste-area');
+        const auto = document.querySelector('#btn-auto-transcript').parentElement;
+        info.classList.remove('hidden');
+        dz.classList.add('hidden');
+        paste.classList.add('hidden');
+        auto.classList.add('hidden');
+        document.getElementById('tr-meta').textContent =
+            `${state.transcriptMeta.sourceName} · ${state.transcriptMeta.format} · ${state.transcriptMeta.segments} linhas`;
+    }
+
+    // ==================== COUNT TOGGLE ====================
+    function wireCountToggle() {
+        const maxCb = document.getElementById('max-count');
+        const countInput = document.getElementById('count');
+        maxCb.addEventListener('change', () => {
+            if (maxCb.checked) {
+                countInput.disabled = true;
+                countInput.value = '';
+                countInput.placeholder = '∞ máximo';
+            } else {
+                countInput.disabled = false;
+                countInput.value = '3';
+                countInput.placeholder = '';
+            }
+        });
+    }
+
+    // ==================== ACTIONS ====================
+    function wireActions() {
+        document.getElementById('btn-start').onclick = startExtraction;
+        document.getElementById('btn-insert').onclick = insertSelectedClips;
+        document.getElementById('btn-select-all').onclick = () => {
+            document.querySelectorAll('#results-list input[type="checkbox"]').forEach(c => c.checked = true);
+        };
+        document.getElementById('prompt').addEventListener('input', updateStartButton);
+    }
+
+    // ==================== SETTINGS / PROVIDERS ====================
     function wireSettings() {
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.onclick = () => {
@@ -136,123 +379,7 @@
         }
     }
 
-    // ==================== MAIN VIEW ====================
-    function wireMainView() {
-        document.getElementById('btn-select-clip').onclick = () => {
-            cs.evalScript('CC.getSelectedProjectItem()', handleHostResult);
-        };
-        document.getElementById('btn-clear-clip').onclick = () => {
-            state.projectItem = null;
-            renderClipInfo();
-            updateStartButton();
-        };
-        document.getElementById('btn-start').onclick = startExtraction;
-        document.getElementById('btn-insert').onclick = insertSelectedClips;
-        document.getElementById('btn-select-all').onclick = () => {
-            document.querySelectorAll('#results-list input[type="checkbox"]').forEach(c => c.checked = true);
-        };
-        document.getElementById('prompt').addEventListener('input', updateStartButton);
-    }
-
-    function handleHostResult(res) {
-        let parsed;
-        try { parsed = JSON.parse(res); } catch (e) {
-            return toast('Erro ao comunicar com Premiere', 'error');
-        }
-        if (!parsed.ok) return toast(parsed.error || 'Selecione um vídeo no painel Project', 'warn');
-        state.projectItem = parsed.item;
-        renderClipInfo();
-        updateStartButton();
-    }
-
-    function renderClipInfo() {
-        const info = document.getElementById('clip-info');
-        const btn = document.getElementById('btn-select-clip');
-        if (!state.projectItem) {
-            info.classList.add('hidden');
-            btn.classList.remove('hidden');
-            return;
-        }
-        btn.classList.add('hidden');
-        info.classList.remove('hidden');
-        document.getElementById('clip-name').textContent = state.projectItem.name;
-        const dur = state.projectItem.durationSeconds || 0;
-        const mins = Math.floor(dur / 60);
-        const secs = Math.floor(dur % 60);
-        document.getElementById('clip-meta').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-    }
-
-    // ==================== TRANSCRIPT ====================
-    function wireTranscript() {
-        const dz = document.getElementById('dropzone-tr');
-        const file = document.getElementById('file-tr');
-
-        dz.addEventListener('click', () => file.click());
-        dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
-        dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
-        dz.addEventListener('drop', e => {
-            e.preventDefault();
-            dz.classList.remove('dragover');
-            const f = e.dataTransfer.files[0];
-            if (f) readTranscriptFile(f);
-        });
-        file.addEventListener('change', e => {
-            if (e.target.files[0]) readTranscriptFile(e.target.files[0]);
-        });
-
-        document.getElementById('btn-use-paste').onclick = () => {
-            const text = document.getElementById('paste-tr').value;
-            if (!text || text.length < 20) return toast('Cole pelo menos algumas frases', 'warn');
-            processTranscript(text, 'texto colado');
-        };
-
-        document.getElementById('btn-clear-tr').onclick = () => {
-            state.transcript = null;
-            state.transcriptMeta = null;
-            document.getElementById('tr-info').classList.add('hidden');
-            document.getElementById('dropzone-tr').classList.remove('hidden');
-            document.querySelector('.paste-details').classList.remove('hidden');
-            document.getElementById('paste-tr').value = '';
-            document.getElementById('file-tr').value = '';
-            updateStartButton();
-        };
-    }
-
-    function readTranscriptFile(file) {
-        const reader = new FileReader();
-        reader.onload = e => processTranscript(e.target.result, file.name);
-        reader.onerror = () => toast('Erro ao ler arquivo', 'error');
-        reader.readAsText(file, 'UTF-8');
-    }
-
-    function processTranscript(content, sourceName) {
-        try {
-            const dur = state.projectItem?.durationSeconds || null;
-            const result = TranscriptParser.parse(content, { durationSeconds: dur });
-            if (!result.text || result.segments < 2) {
-                return toast('Transcrição inválida — não foi possível extrair segmentos', 'error');
-            }
-            state.transcript = result.text;
-            state.transcriptMeta = { ...result, sourceName };
-            renderTranscriptInfo();
-            updateStartButton();
-            toast(`Transcrição carregada (${result.segments} segmentos, formato ${result.format})`, 'success');
-        } catch (e) {
-            toast('Erro ao processar: ' + e.message, 'error');
-        }
-    }
-
-    function renderTranscriptInfo() {
-        const info = document.getElementById('tr-info');
-        const dz = document.getElementById('dropzone-tr');
-        const paste = document.querySelector('.paste-details');
-        info.classList.remove('hidden');
-        dz.classList.add('hidden');
-        paste.classList.add('hidden');
-        document.getElementById('tr-meta').textContent =
-            `${state.transcriptMeta.sourceName} · ${state.transcriptMeta.format} · ${state.transcriptMeta.segments} linhas`;
-    }
-
+    // ==================== VALIDATION ====================
     function updateStartButton() {
         const hasPrompt = document.getElementById('prompt').value.trim().length >= 10;
         const hasClip = !!state.projectItem;
@@ -275,7 +402,8 @@
         const mode = document.querySelector('input[name="mode"]:checked').value;
         const durMin = parseInt(document.getElementById('dur-min').value, 10);
         const durMax = parseInt(document.getElementById('dur-max').value, 10);
-        const count = parseInt(document.getElementById('count').value, 10);
+        const isMax = document.getElementById('max-count').checked;
+        const count = isMax ? 999 : parseInt(document.getElementById('count').value, 10);
 
         if (durMin >= durMax) return toast('Duração mínima deve ser menor que máxima', 'warn');
 
@@ -288,14 +416,12 @@
                 model: state.model,
                 transcript: state.transcript,
                 brief: prompt,
-                mode, durMin, durMax, count
+                mode, durMin, durMax, count,
+                maxMode: isMax
             });
             state.results = { ...result, mode };
             showProgress(true, 'Pronto!', 100);
-            setTimeout(() => {
-                showProgress(false);
-                renderResults();
-            }, 400);
+            setTimeout(() => { showProgress(false); renderResults(); }, 400);
         } catch (err) {
             showProgress(false);
             toast('Erro: ' + err.message, 'error');
@@ -313,6 +439,7 @@
             (state.results.clips || []).forEach((c, idx) => list.appendChild(renderClipCard(c, idx)));
         }
         results.classList.remove('hidden');
+        results.scrollIntoView({ behavior: 'smooth' });
     }
 
     function renderClipCard(clip, idx) {
@@ -348,11 +475,12 @@
     async function insertSelectedClips() {
         const checked = Array.from(document.querySelectorAll('#results-list input[type="checkbox"]:checked'));
         if (!checked.length) return toast('Selecione pelo menos um trecho', 'warn');
-        const newSequence = document.getElementById('new-sequence').checked;
+
         const payload = {
             mode: state.results.mode,
             projectItemNodeId: state.projectItem.nodeId,
-            newSequence,
+            newSequence: document.getElementById('new-sequence').checked,
+            appendRemaining: document.getElementById('append-remaining').checked,
             items: []
         };
         checked.forEach(cb => {
@@ -360,12 +488,18 @@
             if (state.results.mode === 'compilation') payload.items.push(state.results.variations[idx]);
             else payload.items.push(state.results.clips[idx]);
         });
+
         showProgress(true, 'Inserindo na timeline…', 70);
         try {
             const res = await evalHost(`CC.insertClips(${JSON.stringify(JSON.stringify(payload))})`);
             showProgress(false);
-            if (res.ok) toast(`${res.inserted} trecho(s) inseridos`, 'success');
-            else toast('Falha: ' + (res.error || 'erro desconhecido'), 'error');
+            if (res.ok) {
+                let msg = `✓ ${res.inserted} trecho(s) inseridos com cores rotacionadas`;
+                if (res.remainingAppended) msg += ' + vídeo original no final';
+                toast(msg, 'success');
+            } else {
+                toast('Falha: ' + (res.error || 'erro desconhecido'), 'error');
+            }
         } catch (e) {
             showProgress(false);
             toast('Erro: ' + e.message, 'error');
@@ -468,7 +602,7 @@
         const el = document.getElementById('toast');
         el.textContent = msg;
         el.className = 'toast ' + (type || '');
-        setTimeout(() => el.classList.add('hidden'), 3500);
+        setTimeout(() => el.classList.add('hidden'), 4000);
     }
 
     function fmt(sec) {

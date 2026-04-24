@@ -892,6 +892,71 @@ select {
     font-size: 11px;
 }
 
+/* Clip dropdown v1.2 */
+.clip-dropdown {
+    font-size: 13px;
+    padding: 10px 12px;
+}
+
+.row-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-secondary.compact {
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Paste area (sempre visível) */
+.paste-area {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+    background: var(--bg-0);
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.paste-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-weight: 500;
+}
+
+.paste-area textarea {
+    font-size: 12px;
+}
+
+/* Field variants */
+.field-row.tight { gap: 6px; align-items: center; }
+.field-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin-top: 4px;
+}
+
+.checkbox-line.compact {
+    padding: 0 4px;
+    white-space: nowrap;
+}
+
+.insert-note {
+    background: var(--accent-dim);
+    border-left: 3px solid var(--accent);
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.5;
+    margin-top: 4px;
+}
+
 /* Utils */
 .hidden { display: none !important; }
 .actions { display: flex; flex-direction: column; gap: 8px; }

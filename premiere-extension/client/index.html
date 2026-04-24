@@ -26,13 +26,17 @@
                 <div class="step-header">
                     <span class="step-num">1</span>
                     <span class="step-title">Selecione o vídeo</span>
-                    <span class="step-hint">no painel Project do Premiere</span>
+                    <button class="link-btn" id="btn-refresh-clips" title="Atualizar lista">↻</button>
                 </div>
-                <button id="btn-select-clip" class="btn-secondary">Usar clipe selecionado</button>
+                <select id="clip-dropdown" class="clip-dropdown">
+                    <option value="">— Carregando clipes do projeto… —</option>
+                </select>
+                <div class="row-actions">
+                    <button class="btn-secondary compact" id="btn-use-selected">Usar o selecionado no Premiere</button>
+                </div>
                 <div id="clip-info" class="clip-info hidden">
                     <div class="clip-name" id="clip-name">—</div>
                     <div class="clip-meta" id="clip-meta">—</div>
-                    <button class="link-btn" id="btn-clear-clip">Trocar vídeo</button>
                 </div>
             </section>
 
@@ -40,22 +44,31 @@
             <section class="step-section">
                 <div class="step-header">
                     <span class="step-num">2</span>
-                    <span class="step-title">Carregue a transcrição</span>
+                    <span class="step-title">Transcrição</span>
                     <span class="step-hint">TXT, JSON, SRT, VTT, CSV</span>
                 </div>
+
+                <div class="row-actions">
+                    <button class="btn-secondary compact" id="btn-auto-transcript">
+                        🔍 Buscar transcrição automática
+                    </button>
+                </div>
+
                 <div id="dropzone-tr" class="dropzone dropzone-sm">
                     <div class="dropzone-inner">
                         <div class="dropzone-icon">📄</div>
                         <div class="dropzone-title">Arraste o arquivo aqui</div>
-                        <div class="dropzone-hint">ou clique para selecionar</div>
+                        <div class="dropzone-hint">ou clique para selecionar (TXT/JSON/SRT/VTT/CSV)</div>
                     </div>
-                    <input type="file" id="file-tr" accept=".txt,.json,.srt,.vtt,.csv" hidden>
+                    <input type="file" id="file-tr" accept=".txt,.json,.srt,.vtt,.csv,.prtranscript,text/*,application/json" hidden>
                 </div>
-                <details class="paste-details">
-                    <summary>Ou cole o texto da transcrição</summary>
-                    <textarea id="paste-tr" rows="4" placeholder="Cole o texto da transcrição do Premiere aqui..."></textarea>
-                    <button class="btn-secondary" id="btn-use-paste">Usar texto colado</button>
-                </details>
+
+                <div class="paste-area">
+                    <label class="paste-label">Ou cole o texto da transcrição:</label>
+                    <textarea id="paste-tr" rows="4" placeholder="Cole aqui o texto copiado do painel Transcript do Premiere..."></textarea>
+                    <button class="btn-secondary compact" id="btn-use-paste">Usar texto colado</button>
+                </div>
+
                 <div id="tr-info" class="tr-info hidden">
                     <span class="tr-badge">✓ Transcrição carregada</span>
                     <span class="tr-meta" id="tr-meta">—</span>
@@ -114,7 +127,14 @@
                 </div>
                 <div class="field">
                     <label for="count">Quantidade de variações</label>
-                    <input type="number" id="count" value="3" min="1" max="10">
+                    <div class="field-row tight">
+                        <input type="number" id="count" value="3" min="1" max="20" style="flex:1">
+                        <label class="checkbox-line compact">
+                            <input type="checkbox" id="max-count">
+                            <span>Máximo</span>
+                        </label>
+                    </div>
+                    <div class="field-hint">Marque "Máximo" para deixar a IA extrair todos os trechos que conseguir</div>
                 </div>
                 <div class="field">
                     <label for="model-select">Modelo de IA</label>
@@ -145,6 +165,13 @@
                         <input type="checkbox" id="new-sequence" checked>
                         Criar nova sequência
                     </label>
+                    <label class="checkbox-line">
+                        <input type="checkbox" id="append-remaining" checked>
+                        Adicionar vídeo original no final (gap 90s)
+                    </label>
+                    <div class="insert-note">
+                        ✨ Clipes entram na timeline com <strong>cores de rótulo diferentes</strong> e <strong>30s de gap</strong> entre cada um
+                    </div>
                 </div>
             </section>
 
@@ -210,13 +237,22 @@
                     <div class="manual-content">
                         <h3>Use a extensão</h3>
                         <ol>
-                            <li><strong>Passo 1:</strong> Clique em "Usar clipe selecionado" com o vídeo selecionado no Project</li>
-                            <li><strong>Passo 2:</strong> Arraste o arquivo de transcrição (TXT/JSON) para a área indicada</li>
-                            <li><strong>Passo 3:</strong> Escreva seu briefing (o que você quer que a IA encontre)</li>
-                            <li><strong>Passo 4:</strong> Configure modo, duração e modelo de IA</li>
+                            <li><strong>Passo 1:</strong> Escolha o vídeo no dropdown (lista todos os clipes do projeto). Ou clique "Usar o selecionado no Premiere"</li>
+                            <li><strong>Passo 2:</strong> 3 opções:
+                                <ul>
+                                    <li>Clique "🔍 Buscar transcrição automática" (se o Premiere gerou .prtranscript ao lado do vídeo)</li>
+                                    <li>Arraste o arquivo TXT/JSON da transcrição</li>
+                                    <li>Cole o texto direto no campo (Ctrl+V no textarea)</li>
+                                </ul>
+                            </li>
+                            <li><strong>Passo 3:</strong> Escreva seu briefing</li>
+                            <li><strong>Passo 4:</strong> Configure modo, duração, quantidade (marque <strong>Máximo</strong> pra IA extrair o quanto conseguir)</li>
                             <li>Clique <strong>Iniciar extração</strong></li>
-                            <li>Aguarde, revise os trechos, clique <strong>Adicionar à timeline</strong></li>
+                            <li>Revise os trechos, marque/desmarque, e clique <strong>Adicionar à timeline</strong></li>
                         </ol>
+                        <div class="manual-tip">
+                            ✨ <strong>Novidades v1.2:</strong> cada clipe na timeline ganha uma <strong>cor de rótulo diferente</strong> (facilita identificar), <strong>gap de 30s</strong> entre clipes, e o <strong>vídeo original completo</strong> é adicionado no final com gap de 90s (pode desativar na tela de resultados).
+                        </div>
                     </div>
                 </div>
 
@@ -334,7 +370,7 @@
                             <li><strong>Modos:</strong> trecho contínuo ou compilação multi-cut</li>
                             <li><strong>Timeline:</strong> insere subclipes não-destrutivos</li>
                         </ul>
-                        <p class="muted">v1.1.0 — Segunda-feira Framework</p>
+                        <p class="muted">v1.2.0 — Segunda-feira Framework</p>
                     </div>
                 </div>
             </div>

@@ -1,14 +1,26 @@
 ================================================================================
                       FASTVIDEO — INSTRUÇÕES DE USO
                        Extensão para Adobe Premiere Pro
-                              Versão 1.1.0
+                              Versão 1.2.0
 ================================================================================
 
-NOVIDADE v1.1
--------------
-Agora você só precisa EXPORTAR a transcrição do Premiere (formato TXT ou JSON
-do próprio painel) e ARRASTAR na extensão. Sem precisar salvar em lugar
-específico. Muito mais simples.
+NOVIDADES v1.2
+--------------
+- DROPDOWN de clipes: lista TODOS os vídeos do projeto, você escolhe exatamente
+  qual usar (resolve o bug de selecionar o vídeo errado)
+- BUSCAR TRANSCRIÇÃO AUTOMÁTICA: botão que lê arquivo .prtranscript gerado
+  pelo Premiere (se auto-transcription estiver ligado) ou qualquer transcrição
+  ao lado do vídeo
+- PARSER MELHORADO: agora aceita mesmo formatos mal-formados, com detecção
+  e fallback automático
+- COLAR TEXTO: área de paste sempre visível, não precisa expandir nada
+- CORES ROTACIONADAS: cada clipe na timeline ganha uma cor de rótulo diferente
+  (14 cores) para facilitar identificar visualmente
+- GAP 30s: espaçamento automático de 30 segundos entre cada clipe extraído
+- VÍDEO ORIGINAL NO FINAL: após os trechos, o vídeo completo é adicionado
+  na sequência com gap de 90s (pode desativar)
+- MÁXIMO POSSÍVEL: checkbox "Máximo" para deixar a IA extrair todos os trechos
+  que conseguir sem limite de quantidade
 
 
 ================================================================================
@@ -112,16 +124,23 @@ PASSO 6 — USAR A FASTVIDEO
 Na extensão você verá 4 passos numerados:
 
 PASSO 1 — Selecione o vídeo:
-   No Project panel do Premiere, CLIQUE no vídeo para selecioná-lo.
-   Na extensão, clique em "Usar clipe selecionado".
-   Aparece o nome do vídeo e duração.
+   Ao abrir a extensão, todos os vídeos do projeto aparecem num DROPDOWN.
+   Escolha o que você quer usar.
+   OPCIONAL: se já tem um vídeo selecionado no Project panel, clique
+   "Usar o selecionado no Premiere" para atalho rápido.
 
-PASSO 2 — Carregue a transcrição:
-   Arraste o arquivo .txt (ou .json) que você exportou no Passo 5
-   para dentro da área "Arraste o arquivo aqui".
+PASSO 2 — Carregue a transcrição — 3 FORMAS:
 
-   ALTERNATIVA: clique em "Ou cole o texto da transcrição" e cole
-   o texto direto do painel do Premiere (Ctrl+A, Ctrl+C lá, Ctrl+V aqui).
+   FORMA A (mais rápida): clique em "🔍 Buscar transcrição automática".
+   A extensão procura arquivo .prtranscript/.srt/.txt ao lado do vídeo.
+   Funciona se o Premiere tiver "Auto-transcribe on import" ligado.
+
+   FORMA B: arraste o arquivo exportado do Premiere (TXT ou JSON)
+   para a área "Arraste o arquivo aqui".
+
+   FORMA C: cole o texto direto no campo "Ou cole o texto da transcrição"
+   (copie do painel Transcript com Ctrl+A Ctrl+C, cole com Ctrl+V aqui)
+   e clique em "Usar texto colado".
 
    Aparece um badge verde ✓ confirmando que a transcrição foi processada.
 
@@ -145,6 +164,8 @@ PASSO 4 — Configure:
    Duração mín/máx: em segundos (padrão 30-90)
 
    Variações: quantas opções a IA deve gerar (padrão 3)
+              Marque a caixa "Máximo" para deixar a IA extrair
+              TODOS os trechos relevantes sem limite de quantidade.
 
    Modelo: Claude Sonnet 4.6 é o recomendado
 

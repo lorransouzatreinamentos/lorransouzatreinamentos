@@ -18,17 +18,21 @@ REGRAS CRÍTICAS:
 4. Cada trecho deve fazer sentido lido isoladamente (começo, meio, fim).
 5. Priorize ganchos fortes nos primeiros 3 segundos.`;
 
-    function buildUserPrompt({ transcript, brief, mode, durMin, durMax, count }) {
+    function buildUserPrompt({ transcript, brief, mode, durMin, durMax, count, maxMode }) {
+        const quantity = maxMode
+            ? 'QUANTOS TRECHOS conseguir encontrar que sejam realmente relevantes ao briefing (extraia o MÁXIMO possível — não limite a quantidade, mas só inclua trechos com qualidade alta)'
+            : `exatamente ${count} (ou menos, se não houver trechos suficientes de qualidade)`;
+
         const modeBlock = mode === 'compilation'
             ? `MODO: COMPILAÇÃO MULTI-CUT
-Monte ${count} variações de vídeo. Cada variação combina trechos NÃO-contíguos da transcrição, costurando momentos de partes diferentes do vídeo.
+Monte ${quantity} variações de vídeo. Cada variação combina trechos NÃO-contíguos da transcrição, costurando momentos de partes diferentes do vídeo.
 Estrutura recomendada de cada variação: HOOK (3-8s) + BODY (trechos que desenvolvem) + CTA/PUNCHLINE (5-15s finais).
 Duração total de cada variação: entre ${durMin}s e ${durMax}s.
 
 Formato de resposta:
 {"variations":[{"label":"string curta","clips":[{"start":number,"end":number,"role":"hook|body|cta","text":"fala exata"}]}]}`
             : `MODO: TRECHO CONTÍNUO
-Encontre ${count} opções de trechos CONTÍNUOS (sem cortes internos) que funcionem sozinhos.
+Encontre ${quantity} opções de trechos CONTÍNUOS (sem cortes internos) que funcionem sozinhos.
 Duração de cada trecho: entre ${durMin}s e ${durMax}s.
 
 Formato de resposta:
@@ -80,6 +84,7 @@ ${transcript}`;
 
         async extractClips(opts) {
             const userPrompt = buildUserPrompt(opts);
+            const maxTokens = opts.maxMode ? 8192 : 4096;
             const res = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
@@ -90,7 +95,7 @@ ${transcript}`;
                 },
                 body: JSON.stringify({
                     model: opts.model,
-                    max_tokens: 4096,
+                    max_tokens: maxTokens,
                     system: [
                         { type: 'text', text: SYSTEM_PROMPT_BASE, cache_control: { type: 'ephemeral' } }
                     ],
@@ -142,6 +147,7 @@ ${transcript}`;
                 },
                 body: JSON.stringify({
                     model: opts.model,
+                    max_tokens: opts.maxMode ? 8192 : 4096,
                     response_format: { type: 'json_object' },
                     messages: [
                         { role: 'system', content: SYSTEM_PROMPT_BASE },
@@ -193,7 +199,7 @@ ${transcript}`;
                     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
                     generationConfig: {
                         responseMimeType: 'application/json',
-                        maxOutputTokens: 4096
+                        maxOutputTokens: opts.maxMode ? 8192 : 4096
                     }
                 })
             });
