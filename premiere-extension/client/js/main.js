@@ -301,6 +301,7 @@
         state.transcript = null;
         state.transcriptMeta = null;
         state.transcriptSegments = null;
+        state.transcriptWords = null;
         document.getElementById('tr-info').classList.add('hidden');
         document.getElementById('dropzone-tr').classList.remove('hidden');
         document.getElementById('file-tr').value = '';
@@ -649,15 +650,18 @@
                 onProgress: (label, pct) => showProgress(true, label, pct)
             });
             const fromCache = result.fromCache;
-            console.log('[FASTVIDEO] Whisper retornou', result.segments?.length, 'segments, fromCache=', fromCache);
+            const wordsCount = Array.isArray(result.words) ? result.words.length : 0;
+            console.log('[FASTVIDEO] Whisper retornou', result.segments?.length, 'segments,', wordsCount, 'words, fromCache=', fromCache);
             state.transcript = (result.segments || []).map(s => {
                 const m = Math.floor(s.start / 60), sec = Math.floor(s.start % 60);
                 return `[${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}] ${s.text}`;
             }).join('\n');
             state.transcriptSegments = result.segments;
+            state.transcriptWords = Array.isArray(result.words) ? result.words : [];
             state.transcriptMeta = {
                 format: 'whisper',
                 count: result.segments.length,
+                wordsCount,
                 sourceName: state.videoFile.name,
                 sourceVideoPath: state.videoFile.path,
                 fromCache

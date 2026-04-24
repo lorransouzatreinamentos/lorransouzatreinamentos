@@ -293,45 +293,55 @@
                 <div class="manual-step">
                     <div class="manual-num">1</div>
                     <div class="manual-content">
-                        <h3>Configure a API (1x só)</h3>
-                        <p>Clique no ⚙ no topo da extensão. Na aba <strong>Providers</strong>, cole pelo menos uma API key:</p>
+                        <h3>Configure as APIs (1x só)</h3>
+                        <p>Clique no ⚙ no topo da extensão. Na aba <strong>Providers</strong>, cole as keys necessárias:</p>
                         <ul>
-                            <li><strong>Claude</strong> (recomendado): console.anthropic.com/settings/keys</li>
-                            <li><strong>OpenAI</strong>: platform.openai.com/api-keys</li>
+                            <li><strong>OpenAI</strong> (obrigatório para transcrição Whisper): platform.openai.com/api-keys</li>
+                            <li><strong>Claude</strong> (recomendado para análise): console.anthropic.com/settings/keys</li>
                             <li><strong>Gemini</strong> (mais barato): aistudio.google.com/app/apikey</li>
                         </ul>
                         <p>Clique em <strong>Testar conexão</strong>, depois <strong>Salvar chaves</strong>.</p>
+                        <div class="manual-tip">
+                            💡 OpenAI é usada para transcrever o áudio (Whisper). Você ainda pode escolher qualquer provider (Claude/OpenAI/Gemini) para a análise dos cortes.
+                        </div>
                     </div>
                 </div>
 
                 <div class="manual-step">
                     <div class="manual-num">2</div>
                     <div class="manual-content">
-                        <h3>Gere a transcrição no Premiere</h3>
-                        <p>No Premiere Pro:</p>
-                        <ol>
-                            <li>Importe o vídeo no <strong>Project panel</strong></li>
-                            <li>Menu <strong>Window → Text</strong> (abre o painel Text)</li>
-                            <li>Na aba <strong>Transcript</strong>, clique em <strong>Transcrever sequência</strong></li>
-                            <li>Escolha o idioma e clique <strong>Transcrever</strong></li>
-                            <li>Aguarde o processamento (1-3 min)</li>
-                        </ol>
+                        <h3>(Opcional) Instale FFmpeg</h3>
+                        <p>Vídeos maiores que 24MB precisam de FFmpeg para extrair o áudio. Também é recomendado para vídeos menores — reduz custo e tempo de transcrição em até 4x.</p>
+                        <ul>
+                            <li><strong>macOS:</strong> <code>brew install ffmpeg</code></li>
+                            <li><strong>Linux:</strong> <code>sudo apt install ffmpeg</code></li>
+                            <li><strong>Windows:</strong> baixe em <a>ffmpeg.org</a> e adicione ao PATH</li>
+                        </ul>
+                        <div class="manual-tip">
+                            Sem FFmpeg instalado? Ainda funciona para vídeos &lt; 24MB (o arquivo é enviado direto).
+                        </div>
                     </div>
                 </div>
 
                 <div class="manual-step">
                     <div class="manual-num">3</div>
                     <div class="manual-content">
-                        <h3>Exporte a transcrição</h3>
-                        <p>Ainda no painel Transcript do Premiere:</p>
+                        <h3>Arraste o vídeo e analise</h3>
                         <ol>
-                            <li>Clique no ícone <strong>⋯</strong> (três pontos) no canto do painel</li>
-                            <li>Escolha <strong>Exportar transcrição</strong></li>
-                            <li>Selecione <strong>Texto (.txt)</strong> ou <strong>JSON (.json)</strong></li>
-                            <li>Salve em qualquer pasta (ex: Desktop)</li>
+                            <li><strong>Passo 1:</strong> Arraste o arquivo de vídeo na área grande (ou clique para abrir o seletor do sistema). A extensão reconhece .mp4, .mov, .mkv, .webm, etc.</li>
+                            <li><strong>Passo 2:</strong> Escreva um briefing claro (o que você quer extrair desse vídeo).</li>
+                            <li><strong>Passo 3:</strong> Mantenha a fonte de transcrição em <strong>Transcrever com IA</strong> (padrão recomendado). A alternativa manual está no mesmo bloco, só se você já tem o TXT/SRT.</li>
+                            <li><strong>Passo 4:</strong> Escolha o <strong>modo</strong>:
+                                <ul>
+                                    <li><strong>Extrair falas inteiras</strong>: um trecho contínuo por corte. Ideal para palestra, aula, podcast.</li>
+                                    <li><strong>Criar vídeos com cortes</strong>: monta vídeos costurando falas de momentos diferentes (hook + body + payoff).</li>
+                                </ul>
+                            </li>
+                            <li>Clique <strong>Analisar vídeo</strong>. A extensão transcreve o áudio com Whisper, gera candidatos, envia para IA e lista as sugestões.</li>
                         </ol>
                         <div class="manual-tip">
-                            💡 <strong>Dica:</strong> Qualquer formato funciona. A FASTVIDEO detecta automaticamente. TXT puro do Premiere é o mais simples.
+                            📁 A transcrição fica em cache local (por hash do arquivo). Se você refizer a análise com outro briefing, não transcreve de novo.<br>
+                            🔄 Botão <strong>Reprocessar transcrição</strong> força uma nova chamada ao Whisper (ignorando o cache).
                         </div>
                     </div>
                 </div>
@@ -339,21 +349,24 @@
                 <div class="manual-step">
                     <div class="manual-num">4</div>
                     <div class="manual-content">
-                        <h3>Use a extensão</h3>
+                        <h3>Revise, refine e insira</h3>
                         <ol>
-                            <li><strong>Passo 1:</strong> Escolha o vídeo no dropdown (lista todos os clipes do projeto) ou clique "Usar o selecionado no Premiere"</li>
-                            <li><strong>Passo 2:</strong> Arraste o arquivo TXT/JSON/SRT exportado do Premiere na área de transcrição (ou clique para selecionar do computador)</li>
-                            <li><strong>Passo 3:</strong> Escreva seu briefing</li>
-                            <li><strong>Passo 4:</strong> Configure modo, duração, quantidade (marque <strong>Máximo</strong> pra IA extrair o quanto conseguir)</li>
-                            <li>Clique <strong>Iniciar extração</strong></li>
-                            <li>Revise os trechos, marque/desmarque, e clique <strong>Adicionar à timeline</strong></li>
-                            <li>Se quiser recomeçar do zero, use o botão <strong>🔄 Limpar tudo</strong> no final</li>
+                            <li>Cada card traz score, duração, headline, hook, caption e texto completo.</li>
+                            <li>Use os botões por card para iterar sem refazer tudo:
+                                <ul>
+                                    <li><strong>✨ Melhorar</strong>: pede uma versão melhor do mesmo trecho.</li>
+                                    <li><strong>🎣 Novo gancho</strong>: troca só a abertura (hook).</li>
+                                    <li><strong>🔀 Variação</strong>: uma ideia parecida em outro momento.</li>
+                                    <li><strong>🗑 Descartar</strong>: remove o card.</li>
+                                </ul>
+                            </li>
+                            <li>Marque os checkboxes dos que quer usar e clique <strong>Adicionar à timeline</strong>. Se o vídeo ainda não está no Project, a extensão importa automaticamente.</li>
                         </ol>
                         <div class="manual-tip">
-                            ✨ <strong>Regra da timeline:</strong> tudo entra em UMA ÚNICA timeline.<br>
-                            • <strong>Modo contínuo:</strong> cada trecho extraído ganha uma cor de rótulo diferente, com 30s de gap entre trechos.<br>
-                            • <strong>Modo compilação:</strong> cada variação é um GRUPO com a mesma cor (se a variação tem 3 trechos, os 3 ficam com a mesma cor). Grupos diferentes = cores diferentes. Gap de 30s entre grupos.<br>
-                            • No final, o vídeo original completo é adicionado com gap de 90s (pode desativar).
+                            ✨ <strong>Regra da timeline:</strong>
+                            • <strong>Extrair falas:</strong> cada fala vira um vídeo separado com cor própria, gap de 30s.<br>
+                            • <strong>Criar vídeos com cortes:</strong> cada vídeo é um grupo de cortes com a mesma cor; grupos diferentes = cores diferentes; gap de 30s entre grupos.<br>
+                            • Cortes são inseridos apenas uma vez (dedup no cliente E no host).
                         </div>
                     </div>
                 </div>
@@ -362,37 +375,37 @@
                     <div class="manual-num">5</div>
                     <div class="manual-content">
                         <h3>Salve seus briefings favoritos</h3>
-                        <p>Depois de escrever um bom briefing, clique em <strong>💾 Salvar</strong>, dê um nome (ex: "Pegada emocional"). Da próxima vez, use <strong>📂 Carregar</strong>.</p>
-                        <p>Três templates já vêm prontos:</p>
-                        <ul>
-                            <li>Pegada emocional</li>
-                            <li>Financeiro / Empresarial</li>
-                            <li>Reels educacionais</li>
-                        </ul>
+                        <p>Depois de escrever um bom briefing, clique em <strong>💾 Salvar</strong> e dê um nome (ex: "Pegada emocional"). Da próxima vez, use <strong>📂 Carregar</strong>.</p>
+                        <p>Três templates já vêm prontos: Pegada emocional · Financeiro/Empresarial · Reels educacionais.</p>
                     </div>
                 </div>
 
                 <div class="manual-troubleshooting">
                     <h3>⚠ Problemas comuns</h3>
                     <div class="trouble-item">
-                        <strong>"Transcrição vazia ou inválida":</strong>
-                        <span>O arquivo pode estar corrompido. Re-exporte do Premiere como TXT.</span>
+                        <strong>"Drag-drop não forneceu caminho local":</strong>
+                        <span>Clique no dropzone em vez de arrastar — abre o seletor nativo do CEP que sempre retorna o path.</span>
+                    </div>
+                    <div class="trouble-item">
+                        <strong>"FFmpeg não encontrado" (vídeo &gt;= 24MB):</strong>
+                        <span>Instale com <code>brew install ffmpeg</code> (Mac) ou use a opção avançada "Importar transcrição manual".</span>
                     </div>
                     <div class="trouble-item">
                         <strong>"Sem sequência ativa":</strong>
                         <span>Marque "Criar nova sequência" antes de inserir na timeline.</span>
                     </div>
                     <div class="trouble-item">
-                        <strong>"API error" ao extrair:</strong>
+                        <strong>"API error" durante análise:</strong>
                         <span>Teste a conexão nas Settings. Verifique crédito no provider.</span>
                     </div>
                     <div class="trouble-item">
                         <strong>Cortes cortam no meio da frase:</strong>
-                        <span>Use Sonnet 4.6 ou Opus 4.7 para maior precisão (especialmente modo compilação).</span>
+                        <span>A IA recebe candidatos pré-validados — raramente acontece. Se acontecer, use "Melhorar este corte" no card.</span>
                     </div>
                 </div>
 
                 <div class="manual-footer">
+                    <p>FASTVIDEO v1.10 · Fluxo: vídeo → Whisper → candidatos → IA escolhe → timeline</p>
                     <p>📖 Documentação completa: README.md no repositório</p>
                 </div>
             </div>
@@ -483,12 +496,13 @@
                         <h3>FASTVIDEO</h3>
                         <p>Extensão para Adobe Premiere Pro que extrai os melhores trechos de vídeos usando IA.</p>
                         <ul>
-                            <li><strong>Transcrição:</strong> carregue TXT/JSON do Premiere</li>
-                            <li><strong>Providers:</strong> Claude, OpenAI, Gemini</li>
-                            <li><strong>Modos:</strong> trecho contínuo ou compilação multi-cut</li>
-                            <li><strong>Timeline:</strong> insere subclipes não-destrutivos</li>
+                            <li><strong>Transcrição:</strong> automática via OpenAI Whisper (ou manual como fallback)</li>
+                            <li><strong>Providers análise:</strong> Claude, OpenAI, Gemini</li>
+                            <li><strong>Modos:</strong> extrair falas inteiras ou criar vídeos com cortes</li>
+                            <li><strong>Cache:</strong> transcrição salva em ~/.fastvideo-cache por hash do arquivo</li>
+                            <li><strong>Timeline:</strong> subclipes não-destrutivos, sem duplicação</li>
                         </ul>
-                        <p class="muted">v1.5.0 — Segunda-feira Framework</p>
+                        <p class="muted">v1.10 — Segunda-feira Framework</p>
                     </div>
                 </div>
             </div>

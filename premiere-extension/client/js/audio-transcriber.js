@@ -243,6 +243,7 @@
         formData.append('model', 'whisper-1');
         formData.append('response_format', 'verbose_json');
         formData.append('timestamp_granularities[]', 'segment');
+        formData.append('timestamp_granularities[]', 'word');
 
         let res;
         try {
@@ -280,11 +281,19 @@
             text: (s.text || '').trim()
         }));
 
-        console.log(`${LOG_PREFIX} Whisper OK — segments: ${segments.length}, duração: ${json.duration || 'n/a'}`);
+        const rawWords = Array.isArray(json.words) ? json.words : [];
+        const words = rawWords.map(w => ({
+            word: String(w.word || '').trim(),
+            start: typeof w.start === 'number' ? w.start : 0,
+            end: typeof w.end === 'number' ? w.end : 0
+        }));
+
+        console.log(`${LOG_PREFIX} Whisper OK — segments: ${segments.length}, words: ${words.length}, duração: ${json.duration || 'n/a'}`);
 
         return {
             text: (json.text || '').trim(),
             segments,
+            words,
             language: json.language || null,
             duration: json.duration || 0
         };
@@ -363,6 +372,7 @@
      */
     const mergeChunkResults = (results) => {
         const allSegments = [];
+        const allWords = [];
         const textParts = [];
         let totalDuration = 0;
         let language = null;
@@ -379,6 +389,15 @@
                     text: seg.text
                 });
             }
+            if (Array.isArray(result.words)) {
+                for (const w of result.words) {
+                    allWords.push({
+                        word: w.word,
+                        start: w.start + offset,
+                        end: w.end + offset
+                    });
+                }
+            }
         }
 
         const segments = allSegments.map((s, idx) => ({
@@ -391,6 +410,7 @@
         return {
             text: textParts.join(' ').trim(),
             segments,
+            words: allWords,
             language,
             duration: totalDuration
         };
@@ -429,6 +449,7 @@
                 return {
                     text: cached.text,
                     segments: cached.segments,
+                    words: Array.isArray(cached.words) ? cached.words : [],
                     fromAudioExtraction: !!cached.fromAudioExtraction,
                     fromCache: true
                 };
@@ -444,50 +465,56 @@
             writeCacheEntry(key, {
                 text: result.text,
                 segments: result.segments,
+                words: result.words || [],
                 fromAudioExtraction: result.fromAudioExtraction
             });
             return { ...result, fromCache: false };
         };
 
         try {
-            // Caminho simples: envia direto
-            if (stats.size < SIZE_LIMIT) {
+            // Estratégia v1.10: SEMPRE extrair áudio se FFmpeg existir
+            // (áudio mono 16kHz 64kbps é ~4x menor e mais rápido de transcrever)
+            onProgress('Procurando FFmpeg…', 8);
+            const ffmpeg = await findFFmpeg();
+
+            // FFmpeg indisponível: fallback só funciona se arquivo < 24MB
+            if (!ffmpeg) {
+                if (stats.size >= SIZE_LIMIT) {
+                    throw new Error(
+                        "FFmpeg não encontrado. Instale FFmpeg (brew install ffmpeg no Mac, apt install ffmpeg no Linux, ou baixe em ffmpeg.org no Windows) OU use vídeos menores que 24MB OU escolha a opção 'Importar transcrição manual'."
+                    );
+                }
+                console.log(`${LOG_PREFIX} FFmpeg ausente; enviando arquivo original direto (fallback)`);
                 onProgress('Enviando para Whisper…', 50);
                 const result = await uploadToWhisper(videoPath, apiKey);
                 onProgress('Transcrição concluída', 100);
                 return saveAndReturn({
                     text: result.text,
                     segments: result.segments,
+                    words: result.words,
                     fromAudioExtraction: false
                 });
             }
 
-            // Caminho com extração de áudio
-            onProgress('Procurando FFmpeg…', 10);
-            const ffmpeg = await findFFmpeg();
-            if (!ffmpeg) {
-                throw new Error(
-                    "FFmpeg não encontrado. Instale FFmpeg (brew install ffmpeg no Mac, apt install ffmpeg no Linux, ou baixe em ffmpeg.org no Windows) OU use vídeos menores que 24MB OU escolha a opção 'Importar transcrição manual'."
-                );
-            }
-
-            onProgress('Extraindo áudio…', 20);
+            // FFmpeg disponível: extrai áudio SEMPRE
+            onProgress('Extraindo áudio…', 18);
             const audioPath = path.join(os.tmpdir(), `fastvideo_audio_${Date.now()}.mp3`);
             tempFiles.push(audioPath);
             await extractAudio(ffmpeg, videoPath, audioPath);
 
             const audioStats = fs.statSync(audioPath);
             const audioSizeMB = (audioStats.size / (1024 * 1024)).toFixed(2);
-            console.log(`${LOG_PREFIX} áudio extraído: ${audioSizeMB}MB`);
+            console.log(`${LOG_PREFIX} áudio extraído: ${audioSizeMB}MB (original: ${sizeMB}MB)`);
 
             // Áudio extraído cabe — envio único
             if (audioStats.size < SIZE_LIMIT) {
-                onProgress('Enviando para Whisper…', 60);
+                onProgress('Enviando para Whisper…', 55);
                 const result = await uploadToWhisper(audioPath, apiKey);
                 onProgress('Transcrição concluída', 100);
                 return saveAndReturn({
                     text: result.text,
                     segments: result.segments,
+                    words: result.words,
                     fromAudioExtraction: true
                 });
             }
@@ -519,6 +546,7 @@
             return saveAndReturn({
                 text: merged.text,
                 segments: merged.segments,
+                words: merged.words,
                 fromAudioExtraction: true
             });
         } catch (err) {
