@@ -4,14 +4,20 @@
 (function() {
     const cs = new CSInterface();
     const state = {
-        projectItem: null,
+        // Vídeo — fonte principal a partir da v1.8 (drop do SO)
+        videoFile: null,       // { name, path, size, type, lastModified, durationSeconds? }
+        projectItem: null,     // legado — clipe do Project Panel
+        // Transcrição
+        transcriptSource: 'ai', // 'ai' | 'manual'
         transcript: null,
         transcriptMeta: null,
-        transcriptSegments: null,  // [{id,start,end,text}] para passar para providers
+        transcriptSegments: null,
+        // Extração / resultados
         results: null,
         providerId: 'anthropic',
         model: 'claude-sonnet-4-6',
-        availableClips: []
+        availableClips: [],
+        isInserting: false     // flag para impedir duplo clique em Adicionar à timeline
     };
 
     document.addEventListener('DOMContentLoaded', init);
@@ -20,7 +26,9 @@
         loadProviders();
         refreshModelDropdown();
         wireNav();
-        wireClipPicker();
+        wireVideoDrop();         // v1.8 — drag-drop de vídeo do SO
+        wireTranscriptSource();  // v1.8 — radio IA vs manual
+        wireClipPicker();        // mantido como alternativa avançada
         wireTranscript();
         wireCountToggle();
         wireActions();
@@ -28,8 +36,76 @@
         wireTemplates();
         wireModals();
         refreshTemplatesUI();
-        // Carrega clipes automaticamente ao abrir
+        // Carrega clipes do Project em background para permitir alternativa
         setTimeout(loadClipsFromProject, 300);
+    }
+
+    // ==================== VIDEO DROP (v1.8) ====================
+    function wireVideoDrop() {
+        if (!window.VideoLoader) {
+            console.error('[FASTVIDEO] VideoLoader não carregou');
+            return;
+        }
+        const dz = document.getElementById('dropzone-video');
+        const fi = document.getElementById('file-video');
+        if (!dz || !fi) return;
+
+        window.VideoLoader.init({
+            dropzoneEl: dz,
+            fileInputEl: fi,
+            onLoad: (videoFile) => {
+                console.log('[FASTVIDEO] Vídeo carregado:', videoFile);
+                state.videoFile = videoFile;
+                renderVideoInfo();
+                updateStartButton();
+                toast(`✓ "${videoFile.name}" carregado`, 'success');
+            },
+            onError: (msg) => {
+                console.warn('[FASTVIDEO] VideoLoader error:', msg);
+                toast(msg, 'error');
+            }
+        });
+
+        const clearBtn = document.getElementById('btn-clear-video');
+        if (clearBtn) clearBtn.onclick = clearVideo;
+    }
+
+    function renderVideoInfo() {
+        const info = document.getElementById('video-info');
+        const dz = document.getElementById('dropzone-video');
+        if (!state.videoFile) {
+            info?.classList.add('hidden');
+            dz?.classList.remove('hidden');
+            return;
+        }
+        info?.classList.remove('hidden');
+        dz?.classList.add('hidden');
+        const nameEl = document.getElementById('video-name');
+        const metaEl = document.getElementById('video-meta');
+        if (nameEl) nameEl.textContent = state.videoFile.name;
+        if (metaEl) {
+            const sizeStr = window.VideoLoader?.formatSize(state.videoFile.size) || '';
+            metaEl.textContent = `${sizeStr} · ${state.videoFile.path || '(caminho desconhecido)'}`;
+        }
+    }
+
+    function clearVideo() {
+        state.videoFile = null;
+        renderVideoInfo();
+        updateStartButton();
+    }
+
+    // ==================== TRANSCRIPT SOURCE RADIO (v1.8) ====================
+    function wireTranscriptSource() {
+        document.querySelectorAll('input[name="tr-source"]').forEach(r => {
+            r.addEventListener('change', () => {
+                const val = document.querySelector('input[name="tr-source"]:checked').value;
+                state.transcriptSource = val;
+                const manualBox = document.getElementById('manual-transcript-box');
+                if (manualBox) manualBox.classList.toggle('hidden', val !== 'manual');
+                updateStartButton();
+            });
+        });
     }
 
     // ==================== NAV ====================
@@ -299,10 +375,19 @@
     function resetAll() {
         if (!confirm('Limpar tudo e começar de novo? Os trechos gerados e configurações deste fluxo serão descartados.')) return;
 
-        // Clipe
+        // Vídeo (drop)
+        clearVideo();
+        // Clipe do Project Panel (alternativa avançada)
         state.projectItem = null;
-        document.getElementById('clip-dropdown').value = '';
-        document.getElementById('clip-info').classList.add('hidden');
+        const cd = document.getElementById('clip-dropdown');
+        if (cd) cd.value = '';
+        document.getElementById('clip-info')?.classList.add('hidden');
+
+        // Fonte de transcrição volta p/ IA
+        const aiRadio = document.querySelector('input[name="tr-source"][value="ai"]');
+        if (aiRadio) aiRadio.checked = true;
+        state.transcriptSource = 'ai';
+        document.getElementById('manual-transcript-box')?.classList.add('hidden');
 
         // Transcrição
         clearTranscript();
@@ -454,18 +539,26 @@
 
     // ==================== VALIDATION ====================
     function updateStartButton() {
-        const hasPrompt = document.getElementById('prompt').value.trim().length >= 10;
-        const hasClip = !!state.projectItem;
+        const hasPrompt    = document.getElementById('prompt').value.trim().length >= 10;
+        const hasVideo     = !!(state.videoFile || state.projectItem);
+        const srcIsManual  = state.transcriptSource === 'manual';
         const hasTranscript = !!state.transcript;
-        const hasProvider = !!state.providerId && !!Storage.getProviders()[state.providerId]?.apiKey;
-        const btn = document.getElementById('btn-start');
-        btn.disabled = !(hasPrompt && hasClip && hasTranscript && hasProvider);
+        const hasProvider  = !!state.providerId && !!Storage.getProviders()[state.providerId]?.apiKey;
+        const hasOpenAI    = !!Storage.getProviders().openai?.apiKey;
 
-        let label = 'Iniciar extração';
-        if (!hasProvider) label = 'Configure um provider em ⚙';
-        else if (!hasClip) label = 'Passo 1: selecione o vídeo';
-        else if (!hasTranscript) label = 'Passo 2: carregue a transcrição';
-        else if (!hasPrompt) label = 'Passo 3: escreva o briefing';
+        // Se fonte é IA: precisa de vídeo + OpenAI key (Whisper)
+        // Se fonte é manual: precisa de transcrição carregada
+        const transcriptReady = srcIsManual ? hasTranscript : (hasVideo && hasOpenAI);
+
+        const btn = document.getElementById('btn-start');
+        btn.disabled = !(hasPrompt && hasVideo && transcriptReady && hasProvider);
+
+        let label = 'Analisar vídeo';
+        if (!hasVideo) label = 'Arraste um vídeo para começar';
+        else if (!hasPrompt) label = 'Escreva o briefing';
+        else if (!hasProvider) label = 'Configure um provider em ⚙';
+        else if (srcIsManual && !hasTranscript) label = 'Carregue a transcrição manual';
+        else if (!srcIsManual && !hasOpenAI) label = 'Configure OpenAI API key para Whisper';
         btn.querySelector('.btn-label').textContent = label;
     }
 
@@ -485,11 +578,68 @@
         const opts = getExtractionOpts();
         if (opts.durMin >= opts.durMax) return toast('Duração mínima deve ser menor que máxima', 'warn');
 
-        console.log('[FASTVIDEO] Iniciando extração — modo:', opts.mode, '| segmentos:', state.transcriptSegments?.length, '| modelo:', state.model);
+        console.log('[FASTVIDEO] Iniciando — modo:', opts.mode, '| fonte transcrição:', state.transcriptSource, '| modelo:', state.model);
+
+        // Se fonte é IA e ainda não tem transcrição (ou é de vídeo diferente), transcreve com Whisper
+        if (state.transcriptSource === 'ai') {
+            const needsTranscribe = !state.transcriptSegments || (state.transcriptMeta?.sourceVideoPath !== state.videoFile?.path);
+            if (needsTranscribe) {
+                const ok = await runWhisperTranscription();
+                if (!ok) return;
+            }
+        }
+
+        if (!state.transcriptSegments || state.transcriptSegments.length < 2) {
+            return toast('Transcrição indisponível — carregue uma manual ou configure o Whisper', 'warn');
+        }
 
         if (opts.mode === 'speech')    return startSpeechExtraction(opts);
         if (opts.mode === 'narrative') return startNarrativeExtraction(opts);
         return startLegacyExtraction(opts);
+    }
+
+    async function runWhisperTranscription() {
+        if (!state.videoFile || !state.videoFile.path) {
+            toast('Arraste um vídeo antes de transcrever', 'warn');
+            return false;
+        }
+        const openaiKey = Storage.getProviders().openai?.apiKey;
+        if (!openaiKey) {
+            toast('Configure a OpenAI API key em ⚙ (usada para Whisper)', 'warn');
+            return false;
+        }
+        if (!window.AudioTranscriber) {
+            toast('AudioTranscriber não carregou', 'error');
+            return false;
+        }
+
+        showProgress(true, 'Preparando transcrição…', 5);
+        try {
+            const result = await window.AudioTranscriber.transcribe({
+                videoPath: state.videoFile.path,
+                apiKey: openaiKey,
+                onProgress: (label, pct) => showProgress(true, label, pct)
+            });
+            console.log('[FASTVIDEO] Whisper retornou', result.segments?.length, 'segments');
+            state.transcript = (result.segments || []).map(s => {
+                const m = Math.floor(s.start / 60), sec = Math.floor(s.start % 60);
+                return `[${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}] ${s.text}`;
+            }).join('\n');
+            state.transcriptSegments = result.segments;
+            state.transcriptMeta = {
+                format: 'whisper',
+                count: result.segments.length,
+                sourceName: state.videoFile.name,
+                sourceVideoPath: state.videoFile.path
+            };
+            toast(`✓ ${result.segments.length} segmentos transcritos via Whisper`, 'success');
+            return true;
+        } catch (e) {
+            showProgress(false);
+            console.error('[FASTVIDEO] Whisper falhou:', e);
+            toast('Erro na transcrição: ' + e.message, 'error');
+            return false;
+        }
     }
 
     async function startSpeechExtraction(opts) {
@@ -745,8 +895,40 @@
     }
 
     async function insertSelectedClips() {
+        if (state.isInserting) {
+            console.warn('[FASTVIDEO] Inserção já em andamento — ignorando clique duplicado');
+            return;
+        }
+
         const checked = Array.from(document.querySelectorAll('#results-list input[type="checkbox"]:checked'));
         if (!checked.length) return toast('Selecione pelo menos um trecho', 'warn');
+
+        // Resolve nodeId: se temos videoFile (drop), importa para o Premiere; senão usa projectItem
+        let nodeId = state.projectItem?.nodeId;
+        if (!nodeId && state.videoFile?.path) {
+            showProgress(true, 'Importando vídeo no Premiere…', 40);
+            try {
+                const importRes = await evalHost(`CC.importVideoIfNeeded(${JSON.stringify(state.videoFile.path)})`);
+                if (!importRes.ok) {
+                    showProgress(false);
+                    return toast('Falha ao importar vídeo: ' + (importRes.error || 'erro'), 'error');
+                }
+                nodeId = importRes.nodeId;
+                // Guarda o projectItem resolvido
+                state.projectItem = {
+                    nodeId: importRes.nodeId,
+                    name: importRes.name,
+                    path: importRes.path,
+                    durationSeconds: importRes.durationSeconds
+                };
+                console.log('[FASTVIDEO] Vídeo importado: nodeId=' + nodeId, 'novo=' + importRes.wasImported);
+            } catch (e) {
+                showProgress(false);
+                return toast('Erro ao importar vídeo: ' + e.message, 'error');
+            }
+        }
+
+        if (!nodeId) return toast('Nenhum vídeo disponível para inserir', 'error');
 
         // Validação final de timestamps antes de enviar para host
         function sanitize(clip) {
@@ -759,7 +941,7 @@
         const insertMode = document.querySelector('input[name="insert-mode"]:checked')?.value || 'new';
         const payload = {
             mode: state.results.mode,
-            projectItemNodeId: state.projectItem.nodeId,
+            projectItemNodeId: nodeId,
             newSequence: insertMode === 'new',
             editExisting: insertMode === 'edit',
             appendRemaining: insertMode === 'new' && document.getElementById('append-remaining').checked,
@@ -807,7 +989,35 @@
             toast(`Atenção: ${invalidCount} trecho(s) ignorado(s) por timestamps inválidos`, 'warn');
         }
 
-        console.log('[FASTVIDEO] Payload para host:', JSON.parse(JSON.stringify(payload)));
+        // Deduplicação cliente — evita enviar mesmo start-end duas vezes no payload
+        const seenKeys = new Set();
+        const dedupedItems = [];
+        let dupCount = 0;
+        for (const item of payload.items) {
+            if (item.clips) {
+                const unique = [];
+                for (const c of item.clips) {
+                    const k = `${c.start.toFixed(2)}-${c.end.toFixed(2)}`;
+                    if (seenKeys.has(k)) { dupCount++; continue; }
+                    seenKeys.add(k);
+                    unique.push(c);
+                }
+                if (unique.length) dedupedItems.push({ ...item, clips: unique });
+            } else {
+                const k = `${item.start.toFixed(2)}-${item.end.toFixed(2)}`;
+                if (seenKeys.has(k)) { dupCount++; continue; }
+                seenKeys.add(k);
+                dedupedItems.push(item);
+            }
+        }
+        payload.items = dedupedItems;
+        if (dupCount) console.warn('[FASTVIDEO] Removidos', dupCount, 'duplicatas do payload');
+
+        console.log('[FASTVIDEO] Payload final:', payload.items.length, 'items (dedup=', dupCount, ')');
+
+        state.isInserting = true;
+        const insertBtn = document.getElementById('btn-insert');
+        if (insertBtn) insertBtn.disabled = true;
 
         showProgress(true, 'Inserindo na timeline…', 70);
         try {
@@ -828,6 +1038,9 @@
         } catch (e) {
             showProgress(false);
             toast('Erro: ' + e.message, 'error');
+        } finally {
+            state.isInserting = false;
+            if (insertBtn) insertBtn.disabled = false;
         }
     }
 

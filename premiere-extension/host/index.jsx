@@ -80,6 +80,33 @@ var CC = (function() {
         return list;
     }
 
+    function normalizePath(p) {
+        if (!p) return '';
+        return String(p).replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
+    }
+
+    function findProjectItemByPath(targetPath, root, depth) {
+        root = root || app.project.rootItem;
+        depth = depth || 0;
+        if (depth > 10) return null;
+        var target = normalizePath(targetPath);
+        if (!target) return null;
+        for (var i = 0; i < root.children.numItems; i++) {
+            var child = root.children[i];
+            if (child.type === 2) {
+                var found = findProjectItemByPath(targetPath, child, depth + 1);
+                if (found) return found;
+            } else {
+                var childPath = '';
+                try { childPath = child.getMediaPath ? child.getMediaPath() : ''; } catch (e) {}
+                if (childPath && normalizePath(childPath) === target) {
+                    return child;
+                }
+            }
+        }
+        return null;
+    }
+
     return {
         // Lista TODOS os clipes de vídeo do projeto (usuário escolhe qual usar)
         listProjectClips: function() {
@@ -213,6 +240,67 @@ var CC = (function() {
                     inserted: result.inserted,
                     sequenceName: sequence.name,
                     remainingAppended: result.remainingAppended
+                });
+            } catch (e) {
+                return fail(e.message || e.toString());
+            }
+        },
+
+        importVideoIfNeeded: function(videoPath) {
+            try {
+                if (!app.project) return fail('Abra um projeto no Premiere');
+                if (!videoPath) return fail('Caminho do vídeo não informado');
+
+                $.writeln('[FV] importVideoIfNeeded: procurando ' + videoPath);
+
+                // 1. Procura no Project Panel
+                var existing = findProjectItemByPath(videoPath);
+                if (existing) {
+                    var exPath = '';
+                    try { exPath = existing.getMediaPath(); } catch (e) {}
+                    $.writeln('[FV] importVideoIfNeeded: encontrado existente nodeId=' + existing.nodeId);
+                    return ok({
+                        nodeId: existing.nodeId,
+                        name: existing.name,
+                        path: exPath,
+                        durationSeconds: getDurationSeconds(existing),
+                        wasImported: false
+                    });
+                }
+
+                // 2. Não encontrou: importar
+                $.writeln('[FV] importVideoIfNeeded: não encontrado, importando...');
+                var targetBin = app.project.rootItem;
+                try {
+                    if (app.project.getInsertionBin) {
+                        var insBin = app.project.getInsertionBin();
+                        if (insBin) targetBin = insBin;
+                    }
+                } catch (e) {}
+
+                try {
+                    app.project.importFiles([videoPath], true, targetBin, false);
+                } catch (impErr) {
+                    $.writeln('[FV] importFiles falhou: ' + impErr.message);
+                    return fail('Não foi possível importar o vídeo');
+                }
+
+                // 3. Busca novamente após importação
+                var imported = findProjectItemByPath(videoPath);
+                if (!imported) {
+                    $.writeln('[FV] importVideoIfNeeded: item não localizado após import');
+                    return fail('Não foi possível importar o vídeo');
+                }
+
+                var impPath = '';
+                try { impPath = imported.getMediaPath(); } catch (e) {}
+                $.writeln('[FV] importVideoIfNeeded: importado com sucesso nodeId=' + imported.nodeId);
+                return ok({
+                    nodeId: imported.nodeId,
+                    name: imported.name,
+                    path: impPath,
+                    durationSeconds: getDurationSeconds(imported),
+                    wasImported: true
                 });
             } catch (e) {
                 return fail(e.message || e.toString());

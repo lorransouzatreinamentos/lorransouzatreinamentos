@@ -1128,6 +1128,70 @@ select {
     margin-top: 4px;
 }
 
+/* ==================== VIDEO DROPZONE (principal) ==================== */
+.dropzone-video {
+    min-height: 130px;
+    border: 2px dashed var(--accent);
+    background: linear-gradient(135deg, rgba(194,108,255,0.08), rgba(194,108,255,0.02));
+    cursor: pointer;
+    transition: all 0.18s;
+}
+
+.dropzone-video:hover,
+.dropzone-video.dragover {
+    background: linear-gradient(135deg, rgba(194,108,255,0.18), rgba(194,108,255,0.06));
+    border-color: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+.dropzone-video .dropzone-icon {
+    font-size: 38px;
+}
+
+.dropzone-video .dropzone-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.badge-recommended {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--success);
+    color: #fff;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+.advanced-toggle {
+    margin-top: 10px;
+    border-top: 1px dashed var(--border);
+    padding-top: 8px;
+}
+
+.advanced-toggle summary {
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+}
+
+.advanced-toggle summary::before { content: '▸ '; font-size: 9px; }
+.advanced-toggle[open] summary::before { content: '▾ '; }
+
+.advanced-body {
+    margin-top: 8px;
+    padding: 8px;
+    background: var(--bg-1);
+    border-radius: var(--radius-sm);
+}
+
 /* ==================== SPEECH CARD (Motor 1) ==================== */
 .speech-text-details {
     margin-top: 6px;

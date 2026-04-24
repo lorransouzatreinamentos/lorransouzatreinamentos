@@ -150,29 +150,23 @@ var Timeline = (function() {
         SUBCLIP_COUNTER++;
         var subName = 'FV_' + SUBCLIP_COUNTER + '_' + startSec.toFixed(1) + '-' + endSec.toFixed(1);
 
+        $.writeln('[FV] insertSubclipRange: inserindo APENAS no video track (áudio segue vinculado)');
+
         // Tenta createSubClip (ticks como STRING — documentação Adobe)
         try {
             var sub = referenceItem.createSubClip(subName, ticksStr(startSec), ticksStr(endSec), 0, 1, 1);
             if (sub) {
                 if (typeof colorIdx === 'number') setLabelColor(sub, colorIdx);
                 sequence.videoTracks[vTrackIdx].insertClip(sub, offsetSec);
-                try {
-                    var aIdx = findAudioTrackIndex(sequence, referenceItem);
-                    if (sequence.audioTracks.numTracks > 0) sequence.audioTracks[aIdx].insertClip(sub, offsetSec);
-                } catch (e) {}
                 return true;
             }
         } catch (e) {
             $.writeln('[FV] createSubClip falhou: ' + e.message);
         }
 
-        // Fallback: overwriteClip com in/out explícitos
+        // Fallback: overwriteClip com in/out explícitos (somente video track)
         try {
             sequence.videoTracks[vTrackIdx].overwriteClip(referenceItem, offsetSec, ticksStr(startSec), ticksStr(endSec));
-            try {
-                var aIdx2 = findAudioTrackIndex(sequence, referenceItem);
-                if (sequence.audioTracks.numTracks > 0) sequence.audioTracks[aIdx2].overwriteClip(referenceItem, offsetSec, ticksStr(startSec), ticksStr(endSec));
-            } catch (e) {}
             return true;
         } catch (e2) {
             $.writeln('[FV] overwriteClip falhou: ' + e2.message);
@@ -183,12 +177,9 @@ var Timeline = (function() {
     function insertFullClip(referenceItem, sequence, offsetSec) {
         offsetSec = Math.max(0, parseFloat(offsetSec));
         var vTrackIdx = findTrackIndex(sequence, referenceItem);
+        $.writeln('[FV] insertFullClip: inserindo APENAS no video track (áudio segue vinculado)');
         try {
             sequence.videoTracks[vTrackIdx].insertClip(referenceItem, offsetSec);
-            try {
-                var aIdx = findAudioTrackIndex(sequence, referenceItem);
-                if (sequence.audioTracks.numTracks > 0) sequence.audioTracks[aIdx].insertClip(referenceItem, offsetSec);
-            } catch (e) {}
             return true;
         } catch (e) {
             $.writeln('[FV] insertFullClip falhou: ' + e.message);
@@ -300,6 +291,20 @@ var Timeline = (function() {
             var itemDur = getItemDuration(referenceItem);
 
             $.writeln('[FV] insertItems: modo=' + payload.mode + ' dur=' + itemDur + 's');
+            $.writeln('[FV] insertItems iniciado com ' + payload.items.length + ' itens');
+            for (var _i = 0; _i < payload.items.length; _i++) {
+                var _it = payload.items[_i];
+                if (_it.clips) {
+                    $.writeln('[FV]   Grupo ' + _i + ': ' + _it.clips.length + ' clips');
+                } else {
+                    $.writeln('[FV]   Item ' + _i + ': ' + _it.start + '-' + _it.end);
+                }
+            }
+
+            function makeKey(s, e) {
+                return Math.round(s * 100) + '-' + Math.round(e * 100);
+            }
+            var insertedKeys = {};
 
             try {
                 if (sequence.getPlayerPosition) {
@@ -317,6 +322,12 @@ var Timeline = (function() {
                         var clip = variation.clips[c];
                         var clamped = clampToItemDuration(clip.start, clip.end, itemDur);
                         if (!clamped) { $.writeln('[FV] clip compilation ignorado: fora dos limites'); continue; }
+                        var key = makeKey(clamped.start, clamped.end);
+                        if (insertedKeys[key]) {
+                            $.writeln('[FV] Ignorando duplicata start=' + clamped.start + ' end=' + clamped.end);
+                            continue;
+                        }
+                        insertedKeys[key] = true;
                         if (insertSubclipRange(referenceItem, sequence, clamped.start, clamped.end, offsetSec, groupColor)) {
                             offsetSec += (clamped.end - clamped.start);
                             inserted++;
@@ -330,6 +341,12 @@ var Timeline = (function() {
                     var item = payload.items[i];
                     var cl = clampToItemDuration(item.start, item.end, itemDur);
                     if (!cl) { $.writeln('[FV] item continuous ignorado: fora dos limites'); continue; }
+                    var keyC = makeKey(cl.start, cl.end);
+                    if (insertedKeys[keyC]) {
+                        $.writeln('[FV] Ignorando duplicata start=' + cl.start + ' end=' + cl.end);
+                        continue;
+                    }
+                    insertedKeys[keyC] = true;
                     var col = LABEL_COLORS[groupCount % LABEL_COLORS.length];
                     if (insertSubclipRange(referenceItem, sequence, cl.start, cl.end, offsetSec, col)) {
                         offsetSec += (cl.end - cl.start) + GAP_BETWEEN_GROUPS_SEC;

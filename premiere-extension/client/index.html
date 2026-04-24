@@ -22,74 +22,98 @@
         <!-- ============ MAIN VIEW ============ -->
         <main id="view-main" class="view active">
 
-            <!-- Passo 1: vídeo -->
+            <!-- Passo 1: vídeo (drag-drop do SO) -->
             <section class="step-section">
                 <div class="step-header">
                     <span class="step-num">1</span>
-                    <span class="step-title">Selecione o vídeo</span>
+                    <span class="step-title">Arraste o vídeo</span>
+                    <span class="step-hint">MP4, MOV, MKV, WEBM…</span>
                 </div>
 
-                <div class="clip-row">
-                    <select id="clip-dropdown" class="clip-dropdown">
-                        <option value="">— Carregando clipes do projeto… —</option>
-                    </select>
-                    <button class="btn-refresh" id="btn-refresh-clips" title="Atualizar lista de vídeos do projeto">
-                        <span class="refresh-icon">↻</span>
-                    </button>
-                </div>
-
-                <div id="dropzone-clip" class="dropzone dropzone-clip">
+                <div id="dropzone-video" class="dropzone dropzone-video">
                     <div class="dropzone-inner">
                         <div class="dropzone-icon">🎬</div>
-                        <div class="dropzone-title">Arraste o vídeo do Project panel aqui</div>
-                        <div class="dropzone-hint">ou use o dropdown acima</div>
+                        <div class="dropzone-title">Arraste seu vídeo aqui</div>
+                        <div class="dropzone-hint">ou clique para selecionar do computador</div>
                     </div>
+                    <input type="file" id="file-video" accept="video/*,audio/*,.mp4,.mov,.m4v,.mxf,.avi,.mkv,.webm,.mp3,.m4a,.wav,.flac" hidden>
                 </div>
 
-                <button class="btn-secondary compact" id="btn-use-selected">↳ Usar o selecionado no Premiere</button>
-
-                <div id="clip-info" class="clip-info hidden">
-                    <div class="clip-name" id="clip-name">—</div>
-                    <div class="clip-meta" id="clip-meta">—</div>
+                <div id="video-info" class="clip-info hidden">
+                    <div class="clip-name" id="video-name">—</div>
+                    <div class="clip-meta" id="video-meta">—</div>
+                    <button class="link-btn" id="btn-clear-video">Trocar vídeo</button>
                 </div>
+
+                <details class="advanced-toggle">
+                    <summary>Ou usar clipe já no Project Panel</summary>
+                    <div class="advanced-body">
+                        <div class="clip-row">
+                            <select id="clip-dropdown" class="clip-dropdown">
+                                <option value="">— Carregando clipes do projeto… —</option>
+                            </select>
+                            <button class="btn-refresh" id="btn-refresh-clips" title="Atualizar lista de vídeos do projeto">
+                                <span class="refresh-icon">↻</span>
+                            </button>
+                        </div>
+                        <button class="btn-secondary compact" id="btn-use-selected">↳ Usar o selecionado no Premiere</button>
+                    </div>
+                </details>
             </section>
 
-            <!-- Passo 2: transcrição -->
+            <!-- Passo 2: briefing -->
             <section class="step-section">
                 <div class="step-header">
                     <span class="step-num">2</span>
-                    <span class="step-title">Transcrição</span>
-                    <span class="step-hint">TXT, JSON, SRT, VTT, CSV</span>
-                </div>
-
-                <div id="dropzone-tr" class="dropzone dropzone-sm">
-                    <div class="dropzone-inner">
-                        <div class="dropzone-icon">📄</div>
-                        <div class="dropzone-title">Arraste o arquivo aqui</div>
-                        <div class="dropzone-hint">ou clique para selecionar do computador</div>
-                    </div>
-                    <input type="file" id="file-tr" accept=".txt,.json,.srt,.vtt,.csv,.prtranscript,text/*,application/json" hidden>
-                </div>
-
-                <div id="tr-info" class="tr-info hidden">
-                    <span class="tr-badge">✓ Transcrição carregada</span>
-                    <span class="tr-meta" id="tr-meta">—</span>
-                    <button class="link-btn" id="btn-clear-tr">Trocar</button>
-                </div>
-            </section>
-
-            <!-- Passo 3: briefing -->
-            <section class="step-section">
-                <div class="step-header">
-                    <span class="step-num">3</span>
-                    <span class="step-title">Briefing (prompt)</span>
+                    <span class="step-title">Briefing</span>
                     <div class="step-actions">
                         <button class="link-btn" id="btn-load-template">📂 Carregar</button>
                         <button class="link-btn" id="btn-save-template">💾 Salvar</button>
                     </div>
                 </div>
                 <textarea id="prompt" rows="4"
-                    placeholder="Ex: Quero trechos com ganchos fortes que falem sobre produtividade, para virar Reels de Instagram."></textarea>
+                    placeholder="Ex: Extraia falas inteiras sobre vendas e mudança de comportamento."></textarea>
+            </section>
+
+            <!-- Passo 3: fonte de transcrição -->
+            <section class="step-section">
+                <div class="step-header">
+                    <span class="step-num">3</span>
+                    <span class="step-title">Fonte de transcrição</span>
+                </div>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="tr-source" value="ai" checked>
+                        <div class="radio-body">
+                            <div class="radio-title">Transcrever com IA <span class="badge-recommended">recomendado</span></div>
+                            <div class="radio-desc">Usa OpenAI Whisper automaticamente — exige OpenAI API key em Configurações</div>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="tr-source" value="manual">
+                        <div class="radio-body">
+                            <div class="radio-title">Importar transcrição manual</div>
+                            <div class="radio-desc">Já tenho um arquivo TXT, JSON, SRT, VTT ou CSV</div>
+                        </div>
+                    </label>
+                </div>
+
+                <div id="manual-transcript-box" class="hidden" style="margin-top:10px">
+                    <div id="dropzone-tr" class="dropzone dropzone-sm">
+                        <div class="dropzone-inner">
+                            <div class="dropzone-icon">📄</div>
+                            <div class="dropzone-title">Arraste o arquivo de transcrição aqui</div>
+                            <div class="dropzone-hint">TXT, JSON, SRT, VTT, CSV</div>
+                        </div>
+                        <input type="file" id="file-tr" accept=".txt,.json,.srt,.vtt,.csv,.prtranscript,text/*,application/json" hidden>
+                    </div>
+
+                    <div id="tr-info" class="tr-info hidden">
+                        <span class="tr-badge">✓ Transcrição carregada</span>
+                        <span class="tr-meta" id="tr-meta">—</span>
+                        <button class="link-btn" id="btn-clear-tr">Trocar</button>
+                    </div>
+                </div>
             </section>
 
             <!-- Passo 4: config -->
@@ -480,6 +504,8 @@
     <script src="js/CSInterface.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/transcript-parser.js"></script>
+    <script src="js/video-loader.js"></script>
+    <script src="js/audio-transcriber.js"></script>
     <script src="js/engines.js"></script>
     <script src="js/providers.js"></script>
     <script src="js/templates.js"></script>
