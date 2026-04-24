@@ -469,6 +469,14 @@
         const checked = Array.from(document.querySelectorAll('#results-list input[type="checkbox"]:checked'));
         if (!checked.length) return toast('Selecione pelo menos um trecho', 'warn');
 
+        // Validação final de timestamps antes de enviar para host
+        function sanitize(clip) {
+            const start = Number(clip.start);
+            const end = Number(clip.end);
+            if (!isFinite(start) || !isFinite(end) || end <= start) return null;
+            return { ...clip, start, end };
+        }
+
         const payload = {
             mode: state.results.mode,
             projectItemNodeId: state.projectItem.nodeId,
@@ -476,11 +484,30 @@
             appendRemaining: document.getElementById('append-remaining').checked,
             items: []
         };
+
+        let invalidCount = 0;
         checked.forEach(cb => {
             const idx = parseInt(cb.dataset.idx, 10);
-            if (state.results.mode === 'compilation') payload.items.push(state.results.variations[idx]);
-            else payload.items.push(state.results.clips[idx]);
+            if (state.results.mode === 'compilation') {
+                const v = state.results.variations[idx];
+                const cleanClips = (v.clips || []).map(sanitize).filter(Boolean);
+                if (cleanClips.length) payload.items.push({ label: v.label, clips: cleanClips });
+                else invalidCount++;
+            } else {
+                const clean = sanitize(state.results.clips[idx]);
+                if (clean) payload.items.push(clean);
+                else invalidCount++;
+            }
         });
+
+        if (!payload.items.length) {
+            return toast('Nenhum trecho válido para inserir (timestamps inválidos)', 'error');
+        }
+        if (invalidCount) {
+            toast(`Atenção: ${invalidCount} trecho(s) ignorado(s) por timestamps inválidos`, 'warn');
+        }
+
+        console.log('[FASTVIDEO] Payload para host:', JSON.parse(JSON.stringify(payload)));
 
         showProgress(true, 'Inserindo na timeline…', 70);
         try {

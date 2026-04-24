@@ -55,13 +55,29 @@ var Timeline = (function() {
         }
     }
 
+    // Contador para garantir nomes únicos dos subclipes (evita colisões)
+    var SUBCLIP_COUNTER = 0;
+
     function insertSubclipRange(referenceItem, sequence, startSec, endSec, offsetSec, colorIdx) {
+        // Validação defensiva — se algo vier errado, ignora sem quebrar
+        startSec = parseFloat(startSec);
+        endSec = parseFloat(endSec);
+        offsetSec = parseFloat(offsetSec);
+        if (isNaN(startSec) || isNaN(endSec) || startSec < 0 || endSec <= startSec) {
+            $.writeln('Timestamps inválidos: start=' + startSec + ' end=' + endSec);
+            return false;
+        }
+
         var inTicks = ticksStr(startSec);
         var outTicks = ticksStr(endSec);
-        var offsetTicks = ticksStr(offsetSec);
+        var offsetTicks = ticksStr(Math.max(0, offsetSec));
+
+        SUBCLIP_COUNTER++;
+        // Nome único garantido por contador + tempo (evita colisão quando dois
+        // trechos têm mesmo Math.floor(start))
+        var subName = 'FV_' + SUBCLIP_COUNTER + '_' + startSec.toFixed(1) + '-' + endSec.toFixed(1);
 
         try {
-            var subName = 'FV_' + Math.floor(startSec) + '-' + Math.floor(endSec);
             var sub = referenceItem.createSubClip(subName, inTicks, outTicks, 0, 1, 1);
             if (sub) {
                 if (typeof colorIdx === 'number') setLabelColor(sub, colorIdx);
@@ -72,44 +88,36 @@ var Timeline = (function() {
                 return true;
             }
         } catch (e) {
-            $.writeln('createSubClip fallback: ' + e.message);
+            $.writeln('createSubClip falhou: ' + e.message);
         }
 
+        // Fallback SEGURO: NÃO mutar referenceItem. Usa overwriteClip com
+        // inPoint/outPoint locais da inserção (Premiere 2024+) ou falha sem
+        // corromper o projeto.
         try {
-            referenceItem.setInPoint(inTicks, 4);
-            referenceItem.setOutPoint(outTicks, 4);
+            // Esta API aceita in/out points explícitos sem alterar o ProjectItem
+            sequence.videoTracks[0].overwriteClip(referenceItem, offsetTicks, inTicks, outTicks);
+            if (sequence.audioTracks.numTracks > 0) {
+                sequence.audioTracks[0].overwriteClip(referenceItem, offsetTicks, inTicks, outTicks);
+            }
+            return true;
+        } catch (e2) {
+            $.writeln('Fallback overwriteClip falhou: ' + e2.message);
+            return false;
+        }
+    }
+
+    function insertFullClip(referenceItem, sequence, offsetSec, colorIdx) {
+        var offsetTicks = ticksStr(Math.max(0, parseFloat(offsetSec)));
+        try {
             sequence.videoTracks[0].insertClip(referenceItem, offsetTicks);
             if (sequence.audioTracks.numTracks > 0) {
                 sequence.audioTracks[0].insertClip(referenceItem, offsetTicks);
             }
             return true;
-        } catch (e) { return false; }
-    }
-
-    function insertFullClip(referenceItem, sequence, offsetSec, colorIdx) {
-        try {
-            var offsetTicks = ticksStr(offsetSec);
-            var dupe = referenceItem.createSubClip(
-                'FV_original_' + Date.now(),
-                '0',
-                String(parseFloat(referenceItem.getOutPoint().ticks)),
-                0, 1, 1
-            );
-            var target = dupe || referenceItem;
-            if (typeof colorIdx === 'number') setLabelColor(target, colorIdx);
-            sequence.videoTracks[0].insertClip(target, offsetTicks);
-            if (sequence.audioTracks.numTracks > 0) {
-                sequence.audioTracks[0].insertClip(target, offsetTicks);
-            }
-            return true;
         } catch (e) {
-            try {
-                sequence.videoTracks[0].insertClip(referenceItem, ticksStr(offsetSec));
-                if (sequence.audioTracks.numTracks > 0) {
-                    sequence.audioTracks[0].insertClip(referenceItem, ticksStr(offsetSec));
-                }
-                return true;
-            } catch (e2) { return false; }
+            $.writeln('insertFullClip falhou: ' + e.message);
+            return false;
         }
     }
 
@@ -117,6 +125,7 @@ var Timeline = (function() {
         createSequence: createSequence,
 
         insertItems: function(referenceItem, sequence, payload) {
+            SUBCLIP_COUNTER = 0; // reset por execução
             var inserted = 0;
             var offsetSec = 0;
             var groupCount = 0;
