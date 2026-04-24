@@ -13,6 +13,7 @@
                 <span class="logo-text">FASTVIDEO</span>
             </div>
             <div class="topbar-actions">
+                <button id="btn-silence" class="icon-btn" title="Remover silêncios">🔇</button>
                 <button id="btn-manual" class="icon-btn" title="Manual de uso">❔</button>
                 <button id="btn-settings" class="icon-btn" title="Configurações">⚙</button>
             </div>
@@ -26,14 +27,27 @@
                 <div class="step-header">
                     <span class="step-num">1</span>
                     <span class="step-title">Selecione o vídeo</span>
-                    <button class="link-btn" id="btn-refresh-clips" title="Atualizar lista">↻</button>
                 </div>
-                <select id="clip-dropdown" class="clip-dropdown">
-                    <option value="">— Carregando clipes do projeto… —</option>
-                </select>
-                <div class="row-actions">
-                    <button class="btn-secondary compact" id="btn-use-selected">Usar o selecionado no Premiere</button>
+
+                <div class="clip-row">
+                    <select id="clip-dropdown" class="clip-dropdown">
+                        <option value="">— Carregando clipes do projeto… —</option>
+                    </select>
+                    <button class="btn-refresh" id="btn-refresh-clips" title="Atualizar lista de vídeos do projeto">
+                        <span class="refresh-icon">↻</span>
+                    </button>
                 </div>
+
+                <div id="dropzone-clip" class="dropzone dropzone-clip">
+                    <div class="dropzone-inner">
+                        <div class="dropzone-icon">🎬</div>
+                        <div class="dropzone-title">Arraste o vídeo do Project panel aqui</div>
+                        <div class="dropzone-hint">ou use o dropdown acima</div>
+                    </div>
+                </div>
+
+                <button class="btn-secondary compact" id="btn-use-selected">↳ Usar o selecionado no Premiere</button>
+
                 <div id="clip-info" class="clip-info hidden">
                     <div class="clip-name" id="clip-name">—</div>
                     <div class="clip-meta" id="clip-meta">—</div>
@@ -148,15 +162,33 @@
                 </div>
                 <div id="results-list" class="results-list"></div>
                 <div class="results-actions">
-                    <button id="btn-insert" class="btn-primary">Adicionar à timeline</button>
-                    <label class="checkbox-line">
-                        <input type="checkbox" id="new-sequence" checked>
-                        Criar nova sequência (tudo junto em uma timeline)
-                    </label>
-                    <label class="checkbox-line">
+                    <div class="field">
+                        <label>Modo de inserção</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="insert-mode" value="new" checked>
+                                <div class="radio-body">
+                                    <div class="radio-title">Criar nova sequência</div>
+                                    <div class="radio-desc">Monta os trechos em uma timeline nova (subclipes não-destrutivos)</div>
+                                </div>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="insert-mode" value="edit">
+                                <div class="radio-body">
+                                    <div class="radio-title">Editar timeline atual</div>
+                                    <div class="radio-desc">Aplica razor cuts no clipe que já está na timeline e pinta os trechos escolhidos com cores</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <label class="checkbox-line" id="append-remaining-line">
                         <input type="checkbox" id="append-remaining" checked>
                         Adicionar vídeo original no final (gap 90s)
                     </label>
+
+                    <button id="btn-insert" class="btn-primary">Adicionar à timeline</button>
+
                     <div class="insert-note">
                         ✨ Contínuo: cada trecho com cor diferente, gap 30s.<br>
                         Compilação: cada variação é um grupo com cor única, gap 30s entre grupos.
@@ -171,6 +203,57 @@
 
             <div id="toast" class="toast hidden"></div>
         </main>
+
+        <!-- ============ SILENCE REMOVER VIEW ============ -->
+        <section id="view-silence" class="view">
+            <header class="view-header">
+                <button class="icon-btn" id="btn-back-silence">←</button>
+                <h2>Remover silêncios 🔇</h2>
+            </header>
+
+            <div class="silence-body">
+                <p class="note">
+                    Analisa a transcrição carregada e identifica <strong>pausas/silêncios longos entre falas</strong>. Em seguida aplica razor cuts na timeline atual e marca os silêncios em vermelho para você deletar.
+                </p>
+
+                <div class="step-section">
+                    <div class="step-header">
+                        <span class="step-num">1</span>
+                        <span class="step-title">Vídeo e transcrição</span>
+                    </div>
+                    <div id="silence-status" class="note">
+                        Volte à tela principal, selecione o vídeo e carregue a transcrição primeiro.
+                    </div>
+                </div>
+
+                <div class="step-section">
+                    <div class="step-header">
+                        <span class="step-num">2</span>
+                        <span class="step-title">Configuração</span>
+                    </div>
+                    <div class="field">
+                        <label for="silence-threshold">Silêncio mínimo (segundos)</label>
+                        <input type="number" id="silence-threshold" value="1.5" min="0.3" max="10" step="0.1">
+                        <div class="field-hint">Pausas maiores que isso entre falas serão marcadas. Recomendado: 1.0 a 2.0s</div>
+                    </div>
+                    <div class="field">
+                        <label for="silence-padding">Margem de segurança (segundos)</label>
+                        <input type="number" id="silence-padding" value="0.3" min="0" max="2" step="0.1">
+                        <div class="field-hint">Evita cortar respirações ou início/fim de palavra</div>
+                    </div>
+                </div>
+
+                <button id="btn-analyze-silence" class="btn-primary" disabled>
+                    <span>🔍 Analisar silêncios</span>
+                </button>
+
+                <div id="silence-results" class="silence-results hidden">
+                    <h3>Silêncios encontrados</h3>
+                    <div id="silence-list" class="silence-list"></div>
+                    <button id="btn-apply-silence" class="btn-primary">Aplicar cortes e marcar em vermelho</button>
+                </div>
+            </div>
+        </section>
 
         <!-- ============ MANUAL VIEW ============ -->
         <section id="view-manual" class="view">
@@ -299,6 +382,7 @@
                 <div class="tabs">
                     <button class="tab-btn active" data-tab="providers">Providers</button>
                     <button class="tab-btn" data-tab="templates">Templates</button>
+                    <button class="tab-btn" data-tab="prompt">Prompt IA</button>
                     <button class="tab-btn" data-tab="about">Sobre</button>
                 </div>
 
@@ -352,6 +436,21 @@
                     </div>
                 </div>
 
+                <!-- Tab Prompt IA -->
+                <div class="tab-content" data-tab="prompt">
+                    <p class="note">
+                        <strong>System prompt</strong> enviado para a IA em TODAS as extrações, junto com o briefing específico de cada vídeo. Editar aqui afeta a qualidade global dos cortes. <em>Edite apenas se souber o que está fazendo.</em>
+                    </p>
+                    <textarea id="system-prompt" rows="18" style="font-family: Monaco, Consolas, monospace; font-size: 11px;"></textarea>
+                    <div class="row-actions">
+                        <button class="btn-primary" id="btn-save-prompt" style="flex:1">💾 Salvar prompt</button>
+                        <button class="btn-secondary" id="btn-reset-prompt" style="flex:1">↺ Restaurar padrão</button>
+                    </div>
+                    <p class="note" style="margin-top: 4px;">
+                        Dica: experimente adicionar regras específicas do seu nicho. Ex: "Evite citações técnicas", "Priorize frases com números", "Prefira hooks em forma de pergunta".
+                    </p>
+                </div>
+
                 <div class="tab-content" data-tab="about">
                     <div class="about">
                         <h3>FASTVIDEO</h3>
@@ -362,7 +461,7 @@
                             <li><strong>Modos:</strong> trecho contínuo ou compilação multi-cut</li>
                             <li><strong>Timeline:</strong> insere subclipes não-destrutivos</li>
                         </ul>
-                        <p class="muted">v1.4.0 — Segunda-feira Framework</p>
+                        <p class="muted">v1.5.0 — Segunda-feira Framework</p>
                     </div>
                 </div>
             </div>

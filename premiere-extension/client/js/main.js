@@ -35,8 +35,11 @@
     function wireNav() {
         document.getElementById('btn-settings').onclick = () => showView('settings');
         document.getElementById('btn-manual').onclick = () => showView('manual');
+        document.getElementById('btn-silence').onclick = () => { showView('silence'); refreshSilenceStatus(); };
         document.getElementById('btn-back-settings').onclick = () => showView('main');
         document.getElementById('btn-back-manual').onclick = () => showView('main');
+        document.getElementById('btn-back-silence').onclick = () => showView('main');
+        wireSilence();
     }
 
     function showView(id) {
@@ -44,9 +47,15 @@
         document.getElementById('view-' + id).classList.add('active');
     }
 
-    // ==================== CLIP PICKER (bug #1 fix) ====================
+    // ==================== CLIP PICKER (bug #1 fix + drag-drop v1.5) ====================
     function wireClipPicker() {
-        document.getElementById('btn-refresh-clips').onclick = loadClipsFromProject;
+        const refreshBtn = document.getElementById('btn-refresh-clips');
+        refreshBtn.onclick = async () => {
+            refreshBtn.classList.add('spinning');
+            await loadClipsFromProject();
+            setTimeout(() => refreshBtn.classList.remove('spinning'), 600);
+        };
+
         document.getElementById('btn-use-selected').onclick = useSelectedFromPremiere;
         document.getElementById('clip-dropdown').onchange = (e) => {
             const nodeId = e.target.value;
@@ -63,6 +72,23 @@
                 updateStartButton();
             }
         };
+
+        // Dropzone para drag-drop do Project panel
+        // CEP não expõe drop de ProjectItem direto, então interceptamos o drop
+        // e pegamos o que estava selecionado no Project naquele momento
+        const dz = document.getElementById('dropzone-clip');
+        dz.addEventListener('dragover', e => {
+            e.preventDefault();
+            dz.classList.add('dragover');
+        });
+        dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+        dz.addEventListener('drop', async e => {
+            e.preventDefault();
+            dz.classList.remove('dragover');
+            // Tenta pegar o item selecionado no Premiere no momento do drop
+            await useSelectedFromPremiere();
+        });
+        dz.addEventListener('click', useSelectedFromPremiere);
     }
 
     async function loadClipsFromProject() {
@@ -131,8 +157,14 @@
 
     function renderClipInfo() {
         const info = document.getElementById('clip-info');
-        if (!state.projectItem) return info.classList.add('hidden');
+        const dz = document.getElementById('dropzone-clip');
+        if (!state.projectItem) {
+            info.classList.add('hidden');
+            if (dz) dz.classList.remove('hidden');
+            return;
+        }
         info.classList.remove('hidden');
+        if (dz) dz.classList.add('hidden');
         document.getElementById('clip-name').textContent = state.projectItem.name;
         const dur = state.projectItem.durationSeconds || 0;
         const mins = Math.floor(dur / 60);
@@ -236,6 +268,14 @@
         };
         document.getElementById('prompt').addEventListener('input', updateStartButton);
         document.getElementById('btn-reset-all').onclick = resetAll;
+
+        // Toggle visibilidade do "append-remaining" conforme modo de inserção
+        document.querySelectorAll('input[name="insert-mode"]').forEach(r => {
+            r.addEventListener('change', () => {
+                const isEdit = document.querySelector('input[name="insert-mode"]:checked').value === 'edit';
+                document.getElementById('append-remaining-line').style.display = isEdit ? 'none' : '';
+            });
+        });
     }
 
     function resetAll() {
@@ -267,8 +307,11 @@
         document.getElementById('results').classList.add('hidden');
 
         // Toggles de inserção
-        document.getElementById('new-sequence').checked = true;
+        const newRadio = document.querySelector('input[name="insert-mode"][value="new"]');
+        if (newRadio) newRadio.checked = true;
         document.getElementById('append-remaining').checked = true;
+        const appendLine = document.getElementById('append-remaining-line');
+        if (appendLine) appendLine.style.display = '';
 
         // Progress
         showProgress(false);
@@ -305,6 +348,24 @@
             updateStartButton();
             toast('Chaves salvas com sucesso', 'success');
         };
+
+        // Aba Prompt IA: editar system prompt
+        const spArea = document.getElementById('system-prompt');
+        if (spArea) {
+            spArea.value = Providers.getSystemPrompt();
+            document.getElementById('btn-save-prompt').onclick = () => {
+                const txt = spArea.value.trim();
+                if (txt.length < 100) return toast('Prompt muito curto (mín. 100 caracteres)', 'warn');
+                Providers.setSystemPrompt(txt);
+                toast('Prompt salvo. Será usado nas próximas extrações.', 'success');
+            };
+            document.getElementById('btn-reset-prompt').onclick = () => {
+                if (!confirm('Restaurar o system prompt para o padrão da FASTVIDEO?')) return;
+                Providers.resetSystemPrompt();
+                spArea.value = Providers.defaultSystemPrompt;
+                toast('Prompt restaurado ao padrão', 'success');
+            };
+        }
 
         document.querySelectorAll('[data-test]').forEach(btn => {
             btn.onclick = async () => {
@@ -491,11 +552,13 @@
             return { ...clip, start, end };
         }
 
+        const insertMode = document.querySelector('input[name="insert-mode"]:checked')?.value || 'new';
         const payload = {
             mode: state.results.mode,
             projectItemNodeId: state.projectItem.nodeId,
-            newSequence: document.getElementById('new-sequence').checked,
-            appendRemaining: document.getElementById('append-remaining').checked,
+            newSequence: insertMode === 'new',
+            editExisting: insertMode === 'edit',
+            appendRemaining: insertMode === 'new' && document.getElementById('append-remaining').checked,
             items: []
         };
 
@@ -528,8 +591,13 @@
             const res = await evalHost(`CC.insertClips(${JSON.stringify(JSON.stringify(payload))})`);
             showProgress(false);
             if (res.ok) {
-                let msg = `✓ ${res.inserted} trecho(s) inseridos com cores rotacionadas`;
-                if (res.remainingAppended) msg += ' + vídeo original no final';
+                let msg;
+                if (res.editMode) {
+                    msg = `✓ ${res.inserted} corte(s) aplicado(s) na timeline atual com cores`;
+                } else {
+                    msg = `✓ ${res.inserted} trecho(s) inseridos com cores rotacionadas`;
+                    if (res.remainingAppended) msg += ' + vídeo original no final';
+                }
                 toast(msg, 'success');
             } else {
                 toast('Falha: ' + (res.error || 'erro desconhecido'), 'error');
@@ -612,6 +680,120 @@
         document.getElementById('btn-close-modal').onclick = () => {
             document.getElementById('modal-load').classList.add('hidden');
         };
+    }
+
+    // ==================== SILENCE REMOVER ====================
+    let silenceGaps = [];
+
+    function wireSilence() {
+        document.getElementById('btn-analyze-silence').onclick = analyzeSilences;
+        document.getElementById('btn-apply-silence').onclick = applySilenceCuts;
+    }
+
+    function refreshSilenceStatus() {
+        const status = document.getElementById('silence-status');
+        const btn = document.getElementById('btn-analyze-silence');
+        const hasClip = !!state.projectItem;
+        const hasTranscript = !!state.transcript;
+        if (hasClip && hasTranscript) {
+            status.innerHTML = `✓ <strong>${escapeHtml(state.projectItem.name)}</strong> com ${state.transcriptMeta.segments} segmentos de transcrição prontos para análise.`;
+            status.style.color = 'var(--success)';
+            btn.disabled = false;
+        } else {
+            status.innerHTML = 'Volte à tela principal (←), selecione o vídeo e carregue a transcrição primeiro.';
+            status.style.color = 'var(--text-muted)';
+            btn.disabled = true;
+        }
+    }
+
+    function analyzeSilences() {
+        const threshold = parseFloat(document.getElementById('silence-threshold').value) || 1.5;
+        const padding = parseFloat(document.getElementById('silence-padding').value) || 0.3;
+
+        // Parse transcript: cada linha é "[mm:ss] texto"
+        const lines = state.transcript.split('\n').map(line => {
+            const m = line.match(/^\[(\d{1,2}):(\d{2})\]\s*(.*)$/);
+            if (!m) return null;
+            return {
+                start: parseInt(m[1], 10) * 60 + parseInt(m[2], 10),
+                text: m[3].trim(),
+                words: m[3].trim().split(/\s+/).length
+            };
+        }).filter(Boolean);
+
+        if (lines.length < 2) {
+            return toast('Transcrição sem timestamps suficientes', 'warn');
+        }
+
+        // Estima fim de cada frase: start da próxima linha OU start + wordCount/2.5 wps
+        silenceGaps = [];
+        for (let i = 0; i < lines.length - 1; i++) {
+            const current = lines[i];
+            const next = lines[i + 1];
+            const estimatedEnd = current.start + Math.max(1, current.words / 2.5);
+            const gap = next.start - estimatedEnd;
+            if (gap >= threshold) {
+                silenceGaps.push({
+                    start: estimatedEnd + padding,
+                    end: next.start - padding,
+                    duration: gap - 2 * padding
+                });
+            }
+        }
+
+        renderSilenceList();
+    }
+
+    function renderSilenceList() {
+        const list = document.getElementById('silence-list');
+        const box = document.getElementById('silence-results');
+        list.innerHTML = '';
+
+        if (!silenceGaps.length) {
+            list.innerHTML = '<p class="note">Nenhum silêncio encontrado acima do limite configurado. Tente reduzir o threshold.</p>';
+            box.classList.remove('hidden');
+            return;
+        }
+
+        silenceGaps.forEach((gap, idx) => {
+            const card = document.createElement('div');
+            card.className = 'result-card';
+            card.innerHTML = `
+                <input type="checkbox" data-idx="${idx}" checked>
+                <div class="result-body">
+                    <div class="result-label-row">
+                        <div class="result-label">Silêncio ${idx + 1}</div>
+                        <span class="score-badge score-low">${gap.duration.toFixed(1)}s</span>
+                    </div>
+                    <div class="result-timestamp">${fmt(gap.start)} → ${fmt(gap.end)}</div>
+                </div>`;
+            list.appendChild(card);
+        });
+
+        box.classList.remove('hidden');
+        toast(`${silenceGaps.length} silêncio(s) encontrado(s)`, 'success');
+    }
+
+    async function applySilenceCuts() {
+        const checked = Array.from(document.querySelectorAll('#silence-list input[type="checkbox"]:checked'));
+        if (!checked.length) return toast('Selecione pelo menos um silêncio', 'warn');
+
+        const gaps = checked.map(cb => silenceGaps[parseInt(cb.dataset.idx, 10)]);
+        const payload = {
+            projectItemNodeId: state.projectItem.nodeId,
+            gaps: gaps.map(g => ({ start: g.start, end: g.end }))
+        };
+
+        showProgress(true, 'Aplicando cortes…', 70);
+        try {
+            const res = await evalHost(`CC.markSilences(${JSON.stringify(JSON.stringify(payload))})`);
+            showProgress(false);
+            if (res.ok) toast(`✓ ${res.cut} silêncio(s) marcados em vermelho na timeline`, 'success');
+            else toast('Falha: ' + (res.error || 'erro'), 'error');
+        } catch (e) {
+            showProgress(false);
+            toast('Erro: ' + e.message, 'error');
+        }
     }
 
     // ==================== HELPERS ====================

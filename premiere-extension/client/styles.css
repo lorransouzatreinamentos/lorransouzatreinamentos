@@ -892,10 +892,63 @@ select {
     font-size: 11px;
 }
 
-/* Clip dropdown v1.2 */
+/* Clip dropdown v1.5 */
+.clip-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
 .clip-dropdown {
+    flex: 1;
     font-size: 13px;
     padding: 10px 12px;
+}
+
+.btn-refresh {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    min-height: 40px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 120ms, transform 200ms;
+    flex-shrink: 0;
+}
+
+.btn-refresh:hover {
+    background: var(--accent-hover);
+}
+
+.btn-refresh.spinning .refresh-icon {
+    animation: spin 600ms linear;
+}
+
+.refresh-icon {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-block;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Dropzone para vídeo */
+.dropzone-clip {
+    padding: 16px 12px;
+    background: var(--bg-0);
+}
+
+.dropzone-clip.dragover {
+    background: var(--accent-dim);
+    border-color: var(--accent);
 }
 
 .row-actions {
@@ -947,6 +1000,31 @@ select {
     background: rgba(239, 83, 80, 0.15);
     color: var(--danger);
     border: 1px solid var(--danger);
+}
+
+/* Silence remover */
+.silence-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.silence-results {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+}
+
+.silence-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 300px;
+    overflow-y: auto;
 }
 
 /* Reset discreto (sempre visível) */

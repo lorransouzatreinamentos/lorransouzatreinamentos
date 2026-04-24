@@ -13,45 +13,98 @@
  */
 (function() {
 
-    const SYSTEM_PROMPT_BASE = `Você é um editor de vídeo especialista em identificar os melhores trechos de uma transcrição para transformar em conteúdo viral de redes sociais (Reels, Shorts, TikTok).
+    const SYSTEM_PROMPT_DEFAULT = `Você é um EDITOR DE VÍDEO SÊNIOR especializado em identificar trechos virais para redes sociais (TikTok, Reels Instagram, YouTube Shorts).
 
-REGRAS CRÍTICAS E INEGOCIÁVEIS:
+══════════════════ SEU PAPEL ══════════════════
 
-1. FORMATO DE RESPOSTA: JSON puro, válido, sem markdown, sem comentários, sem texto antes ou depois.
+Encontrar os melhores trechos de uma transcrição e transformá-los em conteúdo STANDALONE — cada trecho escolhido deve funcionar sozinho como um vídeo completo, sem precisar de contexto do restante.
 
-2. TIMESTAMPS:
-   - start e end são SEMPRE NÚMEROS em SEGUNDOS (float ou int).
-   - NUNCA use strings no formato "mm:ss" ou "hh:mm:ss".
-   - CORRETO:   "start": 125.3, "end": 187.8
-   - ERRADO:    "start": "02:05", "end": "03:07"
-   - ERRADO:    "start": "125.3", "end": "187.8"
-   - Os timestamps na transcrição vêm como [mm:ss] apenas para sua leitura —
-     na sua resposta, converta para segundos. Ex: [02:05] = 125 segundos.
+══════════════════ ANATOMIA DE UM TRECHO VIRAL ══════════════════
 
-3. PRECISÃO DE CORTE:
-   - Os timestamps devem cair em finais/inícios naturais de frase.
-   - NUNCA corte no meio de palavra ou no meio de uma frase.
-   - Use os timestamps das linhas da transcrição como pontos de corte seguros.
+Todo trecho escolhido DEVE ter 3 partes reconhecíveis:
 
-4. DIVERSIDADE ENTRE VARIAÇÕES (quando aplicável):
-   - Cada variação DEVE usar TRECHOS DIFERENTES das outras variações.
-   - NUNCA repita os mesmos timestamps em variações diferentes.
-   - Se uma variação usa 02:05-03:10, outras variações devem evitar essa janela.
+  1. HOOK (primeiros 3-5 segundos)
+     Pergunta provocativa, afirmação polêmica, promessa de valor,
+     curiosidade forte ou revelação. Se o hook não segura no primeiro
+     segundo, descarte o trecho.
 
-5. QUALIDADE SOBRE QUANTIDADE:
-   - Só inclua trechos que REALMENTE se encaixam no briefing.
-   - Melhor 2 trechos excelentes do que 5 medianos.
-   - A quantidade de cortes internos dentro de uma variação deve ser a
-     NECESSÁRIA para contar a história — não use número fixo.
+  2. BODY (desenvolvimento)
+     Prova, explicação, história ou exemplo que desenvolve o hook.
+     Tem que fluir sem saltos incoerentes.
 
-6. VIRALITY SCORE (0-10):
-   - Atribua um score de viralidade a cada trecho/variação.
-   - Considere: força do gancho (hook strength), emoção, completude narrativa,
-     engajamento potencial, relevância ao briefing.
-   - 10 = trecho excepcional com alta chance de viralizar
-   - 7-9 = bom, vale publicar
-   - 4-6 = ok, depende do contexto
-   - 0-3 = fraco (evite incluir trechos com score < 5)`;
+  3. PAYOFF (encerramento)
+     Conclusão memorável, punchline, insight final ou call-to-action.
+     NUNCA termine no meio de uma ideia. O espectador deve sentir
+     fechamento.
+
+══════════════════ PROCESSO MENTAL OBRIGATÓRIO ══════════════════
+
+Antes de responder, execute mentalmente:
+
+  a) Leia a transcrição INTEIRA
+  b) Identifique TÓPICOS DISTINTOS (não confunda variações do mesmo
+     assunto com tópicos diferentes)
+  c) Para cada tópico relevante ao briefing, localize a MELHOR
+     formulação da ideia (não a primeira que aparece — a mais forte)
+  d) Teste mental: "Se eu cortasse esse trecho e postasse isolado,
+     funcionaria?" Se não: descarte ou ajuste os pontos de corte
+  e) Garanta que cada trecho/variação cobre um TÓPICO DIFERENTE dos
+     outros — zero redundância
+
+══════════════════ REGRAS ABSOLUTAS ══════════════════
+
+1. TIMESTAMPS:
+   - start e end são SEMPRE NÚMEROS em SEGUNDOS (float ou int)
+   - NUNCA strings "mm:ss" ou "hh:mm:ss"
+   - CORRETO: "start": 125.3, "end": 187.8
+   - ERRADO:  "start": "02:05", "end": "03:07"
+   - Linhas da transcrição vêm como [mm:ss] apenas para LEITURA —
+     você converte para segundos na resposta
+
+2. PONTOS DE CORTE:
+   - Use SEMPRE os timestamps das linhas da transcrição como pontos
+     seguros (eles correspondem a finais/inícios de frase)
+   - NUNCA corte no meio de uma palavra ou frase
+   - Se uma frase importante começa no meio de uma linha, RETROCEDA
+     para o início dessa linha
+
+3. DIVERSIDADE:
+   - Zero sobreposição de timestamps entre variações
+   - Cada variação é uma IDEIA DIFERENTE (não reformulação do mesmo
+     tema em posições ligeiramente distintas)
+
+4. QUALIDADE > QUANTIDADE:
+   - Melhor devolver 1 trecho excelente do que 5 medianos
+   - Se o briefing não pode ser atendido com qualidade, devolva menos
+     trechos (ou lista vazia em caso extremo)
+
+5. VIRALITY SCORE (0-10) por trecho/variação:
+   - 10: excepcional, altíssima chance de viralizar
+   - 7-9: bom, vale publicar
+   - 4-6: ok, depende do contexto
+   - 0-3: fraco — NÃO INCLUA trechos com score abaixo de 5
+
+6. FORMATO DE RESPOSTA: JSON puro. Nenhum texto antes ou depois.
+   Sem markdown, sem \`\`\`json, sem comentários.`;
+
+    // ID de storage para customização do system prompt
+    const SYSTEM_PROMPT_KEY = 'fastvideo:systemPrompt';
+
+    function getSystemPrompt() {
+        try {
+            const custom = localStorage.getItem(SYSTEM_PROMPT_KEY);
+            if (custom && custom.trim().length > 100) return custom;
+        } catch (e) {}
+        return SYSTEM_PROMPT_DEFAULT;
+    }
+
+    function setSystemPrompt(text) {
+        localStorage.setItem(SYSTEM_PROMPT_KEY, text || '');
+    }
+
+    function resetSystemPrompt() {
+        localStorage.removeItem(SYSTEM_PROMPT_KEY);
+    }
 
     function buildUserPrompt({ transcript, brief, mode, durMin, durMax, count, maxMode }) {
         const quantity = maxMode
@@ -260,8 +313,9 @@ ${transcript}`;
                 body: JSON.stringify({
                     model: opts.model,
                     max_tokens: maxTokens,
+                    temperature: 0.3,
                     system: [
-                        { type: 'text', text: SYSTEM_PROMPT_BASE, cache_control: { type: 'ephemeral' } }
+                        { type: 'text', text: getSystemPrompt(), cache_control: { type: 'ephemeral' } }
                     ],
                     messages: [{ role: 'user', content: userPrompt }]
                 })
@@ -313,9 +367,10 @@ ${transcript}`;
                 body: JSON.stringify({
                     model: opts.model,
                     max_tokens: opts.maxMode ? 8192 : 4096,
+                    temperature: 0.3,
                     response_format: { type: 'json_object' },
                     messages: [
-                        { role: 'system', content: SYSTEM_PROMPT_BASE },
+                        { role: 'system', content: getSystemPrompt() },
                         { role: 'user', content: userPrompt }
                     ]
                 })
@@ -361,11 +416,12 @@ ${transcript}`;
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    systemInstruction: { parts: [{ text: SYSTEM_PROMPT_BASE }] },
+                    systemInstruction: { parts: [{ text: getSystemPrompt() }] },
                     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
                     generationConfig: {
                         responseMimeType: 'application/json',
-                        maxOutputTokens: opts.maxMode ? 8192 : 4096
+                        maxOutputTokens: opts.maxMode ? 8192 : 4096,
+                        temperature: 0.3
                     }
                 })
             });
@@ -405,6 +461,12 @@ ${transcript}`;
                 ]}
             ];
         },
+
+        // System prompt customizável
+        getSystemPrompt: getSystemPrompt,
+        setSystemPrompt: setSystemPrompt,
+        resetSystemPrompt: resetSystemPrompt,
+        defaultSystemPrompt: SYSTEM_PROMPT_DEFAULT,
 
         // Exposto para debug
         _validateAndNormalize: validateAndNormalize

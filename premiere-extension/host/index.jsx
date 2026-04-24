@@ -121,18 +121,93 @@ var CC = (function() {
             }
         },
 
+        // Marca silêncios na timeline atual: razor cuts nos pontos + cor vermelha (6=Rose)
+        markSilences: function(payloadJson) {
+            try {
+                var payload = JSON.parse(payloadJson);
+                var seq = app.project.activeSequence;
+                if (!seq) return fail('Abra uma sequência no Premiere primeiro');
+
+                app.enableQE();
+                var qSeq = null;
+                try { qSeq = qe.project.getActiveSequence(); } catch (e) {}
+
+                var cutPoints = {};
+                for (var i = 0; i < payload.gaps.length; i++) {
+                    cutPoints[payload.gaps[i].start.toFixed(3)] = payload.gaps[i].start;
+                    cutPoints[payload.gaps[i].end.toFixed(3)] = payload.gaps[i].end;
+                }
+
+                for (var key in cutPoints) {
+                    if (cutPoints.hasOwnProperty(key)) {
+                        try {
+                            if (qSeq) {
+                                var vt = qSeq.getVideoTrackAt(0);
+                                if (vt && vt.razor) vt.razor(String(cutPoints[key]));
+                                var at = qSeq.getAudioTrackAt(0);
+                                if (at && at.razor) at.razor(String(cutPoints[key]));
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                // Marca clipes que caem nos gaps em vermelho (6 = Rose)
+                var cut = 0;
+                try {
+                    var vTrack = seq.videoTracks[0];
+                    for (var n = 0; n < vTrack.clips.numItems; n++) {
+                        var c = vTrack.clips[n];
+                        var cStart = parseFloat(c.start.seconds);
+                        var cEnd = parseFloat(c.end.seconds);
+                        for (var g = 0; g < payload.gaps.length; g++) {
+                            var gap = payload.gaps[g];
+                            if (cStart >= gap.start - 0.05 && cEnd <= gap.end + 0.05) {
+                                try {
+                                    if (c.setColorLabel) c.setColorLabel(6);
+                                    if (c.projectItem) c.projectItem.setColorLabel(6);
+                                } catch (e) {}
+                                cut++;
+                                break;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    return fail('Erro marcando clipes: ' + e.message);
+                }
+
+                return ok({ cut: cut });
+            } catch (e) {
+                return fail(e.message || e.toString());
+            }
+        },
+
         insertClips: function(payloadJson) {
             try {
                 var payload = JSON.parse(payloadJson);
                 var item = findProjectItemByNodeId(payload.projectItemNodeId);
                 if (!item) return fail('Vídeo não encontrado no projeto');
 
+                app.enableQE();
+
+                // Modo "Editar timeline existente": razor cuts + cores no clipe atual
+                if (payload.editExisting) {
+                    var existingSeq = app.project.activeSequence;
+                    if (!existingSeq) return fail('Abra uma sequência no Premiere primeiro');
+                    var editResult = Timeline.editExistingTimeline(item, existingSeq, payload);
+                    return ok({
+                        inserted: editResult.inserted,
+                        sequenceName: existingSeq.name,
+                        remainingAppended: false,
+                        editMode: true
+                    });
+                }
+
+                // Modo normal: cria ou usa sequência e insere subclipes
                 var sequence = payload.newSequence
                     ? Timeline.createSequence('FASTVIDEO_' + Date.now(), item)
                     : app.project.activeSequence;
                 if (!sequence) return fail('Sem sequência ativa. Marque "Criar nova sequência"');
 
-                app.enableQE();
                 var result = Timeline.insertItems(item, sequence, payload);
                 return ok({
                     inserted: result.inserted,

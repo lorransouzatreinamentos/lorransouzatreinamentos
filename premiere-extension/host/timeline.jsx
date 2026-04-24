@@ -130,8 +130,122 @@ var Timeline = (function() {
         }
     }
 
+    /**
+     * Modo "Editar timeline existente": em vez de inserir novos subclipes,
+     * aplica razor cuts no clipe existente na timeline ativa e pinta os
+     * trechos escolhidos com cores distintas (resto fica cinza/neutro).
+     *
+     * Estratégia:
+     *   1. Encontra o clipe na videoTracks[0] que corresponde ao referenceItem
+     *   2. Coleta todos os pontos de corte (start/end de cada trecho escolhido)
+     *   3. Aplica razor nos pontos via QE DOM
+     *   4. Para cada segmento cortado que corresponde a um trecho escolhido,
+     *      aplica setColorLabel com a cor do grupo; resto fica como label neutro
+     */
+    function editExistingTimeline(referenceItem, sequence, payload) {
+        var editsApplied = 0;
+        var groupCount = 0;
+
+        try {
+            app.enableQE();
+        } catch (e) {}
+
+        // Coleta pontos de corte ordenados + mapeamento para cor
+        var cuts = [];  // [{ start, end, color }]
+
+        if (payload.mode === 'compilation') {
+            for (var v = 0; v < payload.items.length; v++) {
+                var variation = payload.items[v];
+                var vColor = LABEL_COLORS[groupCount % LABEL_COLORS.length];
+                var any = false;
+                for (var c = 0; c < (variation.clips || []).length; c++) {
+                    var clip = variation.clips[c];
+                    var s = parseFloat(clip.start);
+                    var e = parseFloat(clip.end);
+                    if (!isNaN(s) && !isNaN(e) && e > s) {
+                        cuts.push({ start: s, end: e, color: vColor });
+                        any = true;
+                    }
+                }
+                if (any) groupCount++;
+            }
+        } else {
+            for (var i = 0; i < payload.items.length; i++) {
+                var item = payload.items[i];
+                var st = parseFloat(item.start);
+                var en = parseFloat(item.end);
+                if (!isNaN(st) && !isNaN(en) && en > st) {
+                    var col = LABEL_COLORS[groupCount % LABEL_COLORS.length];
+                    cuts.push({ start: st, end: en, color: col });
+                    groupCount++;
+                }
+            }
+        }
+
+        if (!cuts.length) return { inserted: 0, groups: 0, remainingAppended: false };
+
+        // Aplica razor via QE DOM em cada ponto único
+        var razorPoints = {};
+        for (var k = 0; k < cuts.length; k++) {
+            razorPoints[cuts[k].start.toFixed(3)] = cuts[k].start;
+            razorPoints[cuts[k].end.toFixed(3)] = cuts[k].end;
+        }
+        var qSeq = null;
+        try { qSeq = qe.project.getActiveSequence(); } catch (e) {}
+
+        for (var key in razorPoints) {
+            if (razorPoints.hasOwnProperty(key)) {
+                var timeSec = razorPoints[key];
+                try {
+                    if (qSeq) {
+                        var track = qSeq.getVideoTrackAt(0);
+                        if (track && track.razor) track.razor(String(timeSec));
+                        var atr = qSeq.getAudioTrackAt(0);
+                        if (atr && atr.razor) atr.razor(String(timeSec));
+                    }
+                } catch (e) {
+                    $.writeln('[FV] razor falhou em ' + timeSec + ': ' + e.message);
+                }
+            }
+        }
+
+        // Agora percorre os clipes da track e pinta os que caem DENTRO de algum trecho
+        try {
+            var vTrack = sequence.videoTracks[0];
+            for (var n = 0; n < vTrack.clips.numItems; n++) {
+                var tClip = vTrack.clips[n];
+                var clipStart = parseFloat(tClip.start.seconds);
+                var clipEnd = parseFloat(tClip.end.seconds);
+
+                for (var m = 0; m < cuts.length; m++) {
+                    var cut = cuts[m];
+                    // Clipe cai dentro do range escolhido (com tolerância)
+                    if (clipStart >= cut.start - 0.05 && clipEnd <= cut.end + 0.05) {
+                        try {
+                            if (tClip.projectItem) setLabelColor(tClip.projectItem, cut.color);
+                            // Também tenta setar label no trackItem
+                            if (tClip.setColorLabel) tClip.setColorLabel(cut.color);
+                        } catch (e) {}
+                        editsApplied++;
+                        break;
+                    }
+                }
+            }
+        } catch (e) {
+            $.writeln('[FV] erro pintando cortes: ' + e.message);
+        }
+
+        return {
+            inserted: editsApplied,
+            groups: groupCount,
+            remainingAppended: false,
+            mode: 'edit-timeline'
+        };
+    }
+
     return {
         createSequence: createSequence,
+        editExistingTimeline: editExistingTimeline,
 
         insertItems: function(referenceItem, sequence, payload) {
             SUBCLIP_COUNTER = 0;
