@@ -48,25 +48,13 @@
                     <span class="step-hint">TXT, JSON, SRT, VTT, CSV</span>
                 </div>
 
-                <div class="row-actions">
-                    <button class="btn-secondary compact" id="btn-auto-transcript">
-                        🔍 Buscar transcrição automática
-                    </button>
-                </div>
-
                 <div id="dropzone-tr" class="dropzone dropzone-sm">
                     <div class="dropzone-inner">
                         <div class="dropzone-icon">📄</div>
                         <div class="dropzone-title">Arraste o arquivo aqui</div>
-                        <div class="dropzone-hint">ou clique para selecionar (TXT/JSON/SRT/VTT/CSV)</div>
+                        <div class="dropzone-hint">ou clique para selecionar do computador</div>
                     </div>
                     <input type="file" id="file-tr" accept=".txt,.json,.srt,.vtt,.csv,.prtranscript,text/*,application/json" hidden>
-                </div>
-
-                <div class="paste-area">
-                    <label class="paste-label">Ou cole o texto da transcrição:</label>
-                    <textarea id="paste-tr" rows="4" placeholder="Cole aqui o texto copiado do painel Transcript do Premiere..."></textarea>
-                    <button class="btn-secondary compact" id="btn-use-paste">Usar texto colado</button>
                 </div>
 
                 <div id="tr-info" class="tr-info hidden">
@@ -163,16 +151,22 @@
                     <button id="btn-insert" class="btn-primary">Adicionar à timeline</button>
                     <label class="checkbox-line">
                         <input type="checkbox" id="new-sequence" checked>
-                        Criar nova sequência
+                        Criar nova sequência (tudo junto em uma timeline)
                     </label>
                     <label class="checkbox-line">
                         <input type="checkbox" id="append-remaining" checked>
                         Adicionar vídeo original no final (gap 90s)
                     </label>
                     <div class="insert-note">
-                        ✨ Clipes entram na timeline com <strong>cores de rótulo diferentes</strong> e <strong>30s de gap</strong> entre cada um
+                        ✨ Contínuo: cada trecho com cor diferente, gap 30s.<br>
+                        Compilação: cada variação é um grupo com cor única, gap 30s entre grupos.
                     </div>
                 </div>
+            </section>
+
+            <!-- Reset -->
+            <section class="reset-section">
+                <button id="btn-reset-all" class="btn-danger-outline">🔄 Limpar tudo e começar de novo</button>
             </section>
 
             <div id="toast" class="toast hidden"></div>
@@ -237,21 +231,19 @@
                     <div class="manual-content">
                         <h3>Use a extensão</h3>
                         <ol>
-                            <li><strong>Passo 1:</strong> Escolha o vídeo no dropdown (lista todos os clipes do projeto). Ou clique "Usar o selecionado no Premiere"</li>
-                            <li><strong>Passo 2:</strong> 3 opções:
-                                <ul>
-                                    <li>Clique "🔍 Buscar transcrição automática" (se o Premiere gerou .prtranscript ao lado do vídeo)</li>
-                                    <li>Arraste o arquivo TXT/JSON da transcrição</li>
-                                    <li>Cole o texto direto no campo (Ctrl+V no textarea)</li>
-                                </ul>
-                            </li>
+                            <li><strong>Passo 1:</strong> Escolha o vídeo no dropdown (lista todos os clipes do projeto) ou clique "Usar o selecionado no Premiere"</li>
+                            <li><strong>Passo 2:</strong> Arraste o arquivo TXT/JSON/SRT exportado do Premiere na área de transcrição (ou clique para selecionar do computador)</li>
                             <li><strong>Passo 3:</strong> Escreva seu briefing</li>
                             <li><strong>Passo 4:</strong> Configure modo, duração, quantidade (marque <strong>Máximo</strong> pra IA extrair o quanto conseguir)</li>
                             <li>Clique <strong>Iniciar extração</strong></li>
                             <li>Revise os trechos, marque/desmarque, e clique <strong>Adicionar à timeline</strong></li>
+                            <li>Se quiser recomeçar do zero, use o botão <strong>🔄 Limpar tudo</strong> no final</li>
                         </ol>
                         <div class="manual-tip">
-                            ✨ <strong>Novidades v1.2:</strong> cada clipe na timeline ganha uma <strong>cor de rótulo diferente</strong> (facilita identificar), <strong>gap de 30s</strong> entre clipes, e o <strong>vídeo original completo</strong> é adicionado no final com gap de 90s (pode desativar na tela de resultados).
+                            ✨ <strong>Regra da timeline:</strong> tudo entra em UMA ÚNICA timeline.<br>
+                            • <strong>Modo contínuo:</strong> cada trecho extraído ganha uma cor de rótulo diferente, com 30s de gap entre trechos.<br>
+                            • <strong>Modo compilação:</strong> cada variação é um GRUPO com a mesma cor (se a variação tem 3 trechos, os 3 ficam com a mesma cor). Grupos diferentes = cores diferentes. Gap de 30s entre grupos.<br>
+                            • No final, o vídeo original completo é adicionado com gap de 90s (pode desativar).
                         </div>
                     </div>
                 </div>
@@ -370,7 +362,7 @@
                             <li><strong>Modos:</strong> trecho contínuo ou compilação multi-cut</li>
                             <li><strong>Timeline:</strong> insere subclipes não-destrutivos</li>
                         </ul>
-                        <p class="muted">v1.2.0 — Segunda-feira Framework</p>
+                        <p class="muted">v1.3.0 — Segunda-feira Framework</p>
                     </div>
                 </div>
             </div>

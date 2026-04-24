@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ExtensionManifest Version="6.0" ExtensionBundleId="com.segundafeira.fastvideo"
-                   ExtensionBundleVersion="1.2.0"
+                   ExtensionBundleVersion="1.3.0"
                    ExtensionBundleName="FASTVIDEO"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <ExtensionList>
-        <Extension Id="com.segundafeira.fastvideo.panel" Version="1.2.0"/>
+        <Extension Id="com.segundafeira.fastvideo.panel" Version="1.3.0"/>
     </ExtensionList>
     <ExecutionEnvironment>
         <HostList>

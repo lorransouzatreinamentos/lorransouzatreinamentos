@@ -158,28 +158,16 @@
             if (e.target.files[0]) readTranscriptFile(e.target.files[0]);
         });
 
-        // Bug #3 fix: paste sempre visível, botão funciona
-        document.getElementById('btn-use-paste').onclick = () => {
-            const text = document.getElementById('paste-tr').value;
-            if (!text || text.trim().length < 20) {
-                return toast('Cole pelo menos 20 caracteres de texto', 'warn');
-            }
-            processTranscript(text, 'texto colado');
-        };
+        document.getElementById('btn-clear-tr').onclick = clearTranscript;
+    }
 
-        document.getElementById('btn-auto-transcript').onclick = findAutoTranscript;
-
-        document.getElementById('btn-clear-tr').onclick = () => {
-            state.transcript = null;
-            state.transcriptMeta = null;
-            document.getElementById('tr-info').classList.add('hidden');
-            document.getElementById('dropzone-tr').classList.remove('hidden');
-            document.querySelector('.paste-area').classList.remove('hidden');
-            document.querySelector('#btn-auto-transcript').parentElement.classList.remove('hidden');
-            document.getElementById('paste-tr').value = '';
-            document.getElementById('file-tr').value = '';
-            updateStartButton();
-        };
+    function clearTranscript() {
+        state.transcript = null;
+        state.transcriptMeta = null;
+        document.getElementById('tr-info').classList.add('hidden');
+        document.getElementById('dropzone-tr').classList.remove('hidden');
+        document.getElementById('file-tr').value = '';
+        updateStartButton();
     }
 
     function readTranscriptFile(file) {
@@ -213,46 +201,11 @@
         }
     }
 
-    async function findAutoTranscript() {
-        if (!state.projectItem) {
-            return toast('Selecione um vídeo primeiro (Passo 1)', 'warn');
-        }
-        const btn = document.getElementById('btn-auto-transcript');
-        btn.disabled = true;
-        btn.textContent = '🔍 Buscando…';
-        try {
-            const res = await evalHost(`CC.findAutoTranscript(${JSON.stringify(state.projectItem.nodeId)})`);
-            if (!res.ok) {
-                toast(res.error, 'warn');
-                showManualTranscriptGuide();
-                return;
-            }
-            processTranscript(res.content, res.fileName);
-        } catch (e) {
-            toast('Erro: ' + e.message, 'error');
-        } finally {
-            btn.disabled = false;
-            btn.textContent = '🔍 Buscar transcrição automática';
-        }
-    }
-
-    function showManualTranscriptGuide() {
-        showView('manual');
-        setTimeout(() => {
-            const firstStep = document.querySelector('#view-manual .manual-step:nth-child(2)');
-            if (firstStep) firstStep.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-    }
-
     function renderTranscriptInfo() {
         const info = document.getElementById('tr-info');
         const dz = document.getElementById('dropzone-tr');
-        const paste = document.querySelector('.paste-area');
-        const auto = document.querySelector('#btn-auto-transcript').parentElement;
         info.classList.remove('hidden');
         dz.classList.add('hidden');
-        paste.classList.add('hidden');
-        auto.classList.add('hidden');
         document.getElementById('tr-meta').textContent =
             `${state.transcriptMeta.sourceName} · ${state.transcriptMeta.format} · ${state.transcriptMeta.segments} linhas`;
     }
@@ -282,6 +235,46 @@
             document.querySelectorAll('#results-list input[type="checkbox"]').forEach(c => c.checked = true);
         };
         document.getElementById('prompt').addEventListener('input', updateStartButton);
+        document.getElementById('btn-reset-all').onclick = resetAll;
+    }
+
+    function resetAll() {
+        if (!confirm('Limpar tudo e começar de novo? Os trechos gerados e configurações deste fluxo serão descartados.')) return;
+
+        // Clipe
+        state.projectItem = null;
+        document.getElementById('clip-dropdown').value = '';
+        document.getElementById('clip-info').classList.add('hidden');
+
+        // Transcrição
+        clearTranscript();
+
+        // Briefing
+        document.getElementById('prompt').value = '';
+
+        // Config (volta aos defaults)
+        document.querySelector('input[name="mode"][value="continuous"]').checked = true;
+        document.getElementById('dur-min').value = 30;
+        document.getElementById('dur-max').value = 90;
+        document.getElementById('max-count').checked = false;
+        document.getElementById('count').disabled = false;
+        document.getElementById('count').value = 3;
+        document.getElementById('count').placeholder = '';
+
+        // Resultados
+        state.results = null;
+        document.getElementById('results-list').innerHTML = '';
+        document.getElementById('results').classList.add('hidden');
+
+        // Toggles de inserção
+        document.getElementById('new-sequence').checked = true;
+        document.getElementById('append-remaining').checked = true;
+
+        // Progress
+        showProgress(false);
+
+        updateStartButton();
+        toast('Tudo limpo. Pronto para novo fluxo.', 'success');
     }
 
     // ==================== SETTINGS / PROVIDERS ====================

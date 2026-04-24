@@ -80,16 +80,6 @@ var CC = (function() {
         return list;
     }
 
-    function readFile(path) {
-        var f = new File(path);
-        if (!f.exists) return null;
-        f.encoding = 'UTF-8';
-        f.open('r');
-        var content = f.read();
-        f.close();
-        return content;
-    }
-
     return {
         // Lista TODOS os clipes de vídeo do projeto (usuário escolhe qual usar)
         listProjectClips: function() {
@@ -125,56 +115,6 @@ var CC = (function() {
                         nodeId: item.nodeId,
                         durationSeconds: getDurationSeconds(item)
                     }
-                });
-            } catch (e) {
-                return fail(e.message || e.toString());
-            }
-        },
-
-        // Busca transcrição automática gerada pelo Premiere ao lado do media
-        // Premiere cria .prtranscript quando "Auto-transcribe on import" está ligado
-        findAutoTranscript: function(nodeId) {
-            try {
-                var item = findProjectItemByNodeId(nodeId);
-                if (!item) return fail('Clipe não encontrado');
-                var path = '';
-                try { path = item.getMediaPath(); } catch (e) {}
-                if (!path) return fail('Caminho do vídeo não disponível');
-
-                var base = path.replace(/\.[^.\\\/]+$/, '');
-                var candidates = [
-                    base + '.prtranscript',
-                    base + '.transcript',
-                    base + '.srt',
-                    base + '.vtt',
-                    base + '.json',
-                    base + '.txt'
-                ];
-                for (var i = 0; i < candidates.length; i++) {
-                    var content = readFile(candidates[i]);
-                    if (content && content.length > 30) {
-                        return ok({
-                            content: content,
-                            fileName: candidates[i].split(/[\/\\]/).pop(),
-                            path: candidates[i]
-                        });
-                    }
-                }
-
-                return fail('Nenhuma transcrição encontrada. Gere manualmente: Window > Text > Transcribe, depois exporte como TXT/JSON e arraste aqui.');
-            } catch (e) {
-                return fail(e.message || e.toString());
-            }
-        },
-
-        // Abre o painel Text do Premiere para o usuário gerar transcrição
-        openTranscriptPanel: function() {
-            try {
-                // Tenta acionar o comando de menu via app.sourceMonitor ou QE
-                app.enableQE();
-                // Melhor que temos: direcionar o usuário
-                return ok({
-                    instruction: 'Clique em Window > Text > Transcript > Transcribe sequence'
                 });
             } catch (e) {
                 return fail(e.message || e.toString());
