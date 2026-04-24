@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>FASTVIDEO</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header class="topbar">
+            <div class="logo">
+                <span class="logo-mark">◆</span>
+                <span class="logo-text">FASTVIDEO</span>
+            </div>
+            <div class="topbar-actions">
+                <button id="btn-silence" class="icon-btn" title="Remover silêncios">🔇</button>
+                <button id="btn-manual" class="icon-btn" title="Manual de uso">❔</button>
+                <button id="btn-settings" class="icon-btn" title="Configurações">⚙</button>
+            </div>
+        </header>
+
+        <!-- ============ MAIN VIEW ============ -->
+        <main id="view-main" class="view active">
+
+            <!-- Passo 1: vídeo (drag-drop do SO) -->
+            <section class="step-section">
+                <div class="step-header">
+                    <span class="step-num">1</span>
+                    <span class="step-title">Arraste o vídeo</span>
+                    <span class="step-hint">MP4, MOV, MKV, WEBM…</span>
+                </div>
+
+                <div id="dropzone-video" class="dropzone dropzone-video">
+                    <div class="dropzone-inner">
+                        <div class="dropzone-icon">🎬</div>
+                        <div class="dropzone-title">Arraste seu vídeo aqui</div>
+                        <div class="dropzone-hint">ou clique para selecionar do computador</div>
+                    </div>
+                    <input type="file" id="file-video" accept="video/*,audio/*,.mp4,.mov,.m4v,.mxf,.avi,.mkv,.webm,.mp3,.m4a,.wav,.flac" hidden>
+                </div>
+
+                <div id="video-info" class="clip-info hidden">
+                    <div class="clip-name" id="video-name">—</div>
+                    <div class="clip-meta" id="video-meta">—</div>
+                    <div class="video-actions">
+                        <button class="link-btn" id="btn-reprocess-transcription" style="display:none" title="Ignora o cache e transcreve novamente">🔄 Reprocessar</button>
+                        <button class="link-btn" id="btn-clear-video">Trocar vídeo</button>
+                        <button class="link-btn clear-x-btn" id="btn-clear-video-x" title="Remover vídeo">✕</button>
+                    </div>
+                </div>
+
+                <details class="advanced-toggle">
+                    <summary>Ou usar clipe já no Project Panel</summary>
+                    <div class="advanced-body">
+                        <div class="clip-row">
+                            <select id="clip-dropdown" class="clip-dropdown">
+                                <option value="">— Carregando clipes do projeto… —</option>
+                            </select>
+                            <button class="btn-refresh" id="btn-refresh-clips" title="Atualizar lista de vídeos do projeto">
+                                <span class="refresh-icon">↻</span>
+                            </button>
+                        </div>
+                        <button class="btn-secondary compact" id="btn-use-selected">↳ Usar o selecionado no Premiere</button>
+                    </div>
+                </details>
+            </section>
+
+            <!-- Passo 2: briefing -->
+            <section class="step-section">
+                <div class="step-header">
+                    <span class="step-num">2</span>
+                    <span class="step-title">Briefing</span>
+                    <div class="step-actions">
+                        <button class="link-btn" id="btn-load-template">📂 Carregar</button>
+                        <button class="link-btn" id="btn-save-template">💾 Salvar</button>
+                    </div>
+                </div>
+                <textarea id="prompt" rows="4"
+                    placeholder="Ex: Extraia falas inteiras sobre vendas e mudança de comportamento."></textarea>
+            </section>
+
+            <!-- Passo 3: fonte de transcrição -->
+            <section class="step-section">
+                <div class="step-header">
+                    <span class="step-num">3</span>
+                    <span class="step-title">Fonte de transcrição</span>
+                </div>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="tr-source" value="ai" checked>
+                        <div class="radio-body">
+                            <div class="radio-title">Transcrever com IA <span class="badge-recommended">recomendado</span></div>
+                            <div class="radio-desc">Usa OpenAI Whisper automaticamente — exige OpenAI API key em Configurações</div>
+                        </div>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="tr-source" value="manual">
+                        <div class="radio-body">
+                            <div class="radio-title">Importar transcrição manual</div>
+                            <div class="radio-desc">Já tenho um arquivo TXT, JSON, SRT, VTT ou CSV</div>
+                        </div>
+                    </label>
+                </div>
+
+                <div id="manual-transcript-box" class="hidden" style="margin-top:10px">
+                    <div id="dropzone-tr" class="dropzone dropzone-sm">
+                        <div class="dropzone-inner">
+                            <div class="dropzone-icon">📄</div>
+                            <div class="dropzone-title">Arraste o arquivo de transcrição aqui</div>
+                            <div class="dropzone-hint">TXT, JSON, SRT, VTT, CSV</div>
+                        </div>
+                        <input type="file" id="file-tr" accept=".txt,.json,.srt,.vtt,.csv,.prtranscript,text/*,application/json" hidden>
+                    </div>
+
+                    <div id="tr-info" class="tr-info hidden">
+                        <span class="tr-badge">✓ Transcrição carregada</span>
+                        <span class="tr-meta" id="tr-meta">—</span>
+                        <button class="link-btn" id="btn-clear-tr">Trocar</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Passo 4: config -->
+            <section class="step-section">
+                <div class="step-header">
+                    <span class="step-num">4</span>
+                    <span class="step-title">Configurações</span>
+                </div>
+                <div class="field">
+                    <label>Modo de extração</label>
+                    <div class="radio-group">
+                        <label class="radio-option">
+                            <input type="radio" name="mode" value="speech" checked>
+                            <div class="radio-body">
+                                <div class="radio-title">Extrair falas inteiras</div>
+                                <div class="radio-desc">Encontra trechos completos e contínuos, sem cortes internos</div>
+                            </div>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="mode" value="narrative">
+                            <div class="radio-body">
+                                <div class="radio-title">Criar vídeos com cortes</div>
+                                <div class="radio-desc">Combina falas de momentos diferentes para montar vídeos com gancho, desenvolvimento e fechamento</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                <div class="field-row">
+                    <div class="field half">
+                        <label for="dur-min">Duração mín (s)</label>
+                        <input type="number" id="dur-min" value="30" min="5" max="600">
+                    </div>
+                    <div class="field half">
+                        <label for="dur-max">Duração máx (s)</label>
+                        <input type="number" id="dur-max" value="90" min="5" max="600">
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="count">Quantidade de variações</label>
+                    <div class="field-row tight">
+                        <input type="number" id="count" value="3" min="1" max="20" style="flex:1">
+                        <label class="checkbox-line compact">
+                            <input type="checkbox" id="max-count">
+                            <span>Máximo</span>
+                        </label>
+                    </div>
+                    <div class="field-hint">Marque "Máximo" para deixar a IA extrair todos os trechos que conseguir</div>
+                </div>
+                <div class="field">
+                    <label for="model-select">Modelo de IA</label>
+                    <select id="model-select"></select>
+                </div>
+            </section>
+
+            <section class="actions">
+                <button id="btn-start" class="btn-primary" disabled>
+                    <span class="btn-label">Iniciar extração</span>
+                </button>
+            </section>
+
+            <section id="progress" class="progress hidden">
+                <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                <div class="progress-label" id="progress-label">Processando…</div>
+            </section>
+
+            <section id="results" class="results hidden">
+                <div class="results-header">
+                    <h3>Trechos sugeridos</h3>
+                    <button class="link-btn" id="btn-select-all">Selecionar todos</button>
+                </div>
+                <div id="results-list" class="results-list"></div>
+                <div class="results-actions">
+                    <div class="field">
+                        <label>Modo de inserção</label>
+                        <div class="radio-group">
+                            <label class="radio-option">
+                                <input type="radio" name="insert-mode" value="new" checked>
+                                <div class="radio-body">
+                                    <div class="radio-title">Criar nova sequência</div>
+                                    <div class="radio-desc">Monta os trechos em uma timeline nova (subclipes não-destrutivos)</div>
+                                </div>
+                            </label>
+                            <label class="radio-option">
+                                <input type="radio" name="insert-mode" value="edit">
+                                <div class="radio-body">
+                                    <div class="radio-title">Editar timeline atual</div>
+                                    <div class="radio-desc">Aplica razor cuts no clipe que já está na timeline e pinta os trechos escolhidos com cores</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <label class="checkbox-line" id="append-remaining-line">
+                        <input type="checkbox" id="append-remaining" checked>
+                        Adicionar vídeo original no final (gap 90s)
+                    </label>
+
+                    <button id="btn-insert" class="btn-primary">Adicionar à timeline</button>
+
+                    <div class="insert-note">
+                        ✨ Contínuo: cada trecho com cor diferente, gap 30s.<br>
+                        Compilação: cada variação é um grupo com cor única, gap 30s entre grupos.
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reset discreto (sempre visível) -->
+            <section class="reset-section">
+                <button id="btn-reset-all" class="link-btn muted-link">✕ Limpar tudo e começar de novo</button>
+            </section>
+
+            <div id="toast" class="toast hidden"></div>
+        </main>
+
+        <!-- ============ SILENCE REMOVER VIEW ============ -->
+        <section id="view-silence" class="view">
+            <header class="view-header">
+                <button class="icon-btn" id="btn-back-silence">←</button>
+                <h2>Remover silêncios 🔇</h2>
+            </header>
+
+            <div class="silence-body">
+                <p class="note">
+                    Analisa a transcrição carregada e identifica <strong>pausas/silêncios longos entre falas</strong>. Em seguida aplica razor cuts na timeline atual e marca os silêncios em vermelho para você deletar.
+                </p>
+
+                <div class="step-section">
+                    <div class="step-header">
+                        <span class="step-num">1</span>
+                        <span class="step-title">Vídeo e transcrição</span>
+                    </div>
+                    <div id="silence-status" class="note">
+                        Volte à tela principal, selecione o vídeo e carregue a transcrição primeiro.
+                    </div>
+                </div>
+
+                <div class="step-section">
+                    <div class="step-header">
+                        <span class="step-num">2</span>
+                        <span class="step-title">Configuração</span>
+                    </div>
+                    <div class="field">
+                        <label for="silence-threshold">Silêncio mínimo (segundos)</label>
+                        <input type="number" id="silence-threshold" value="1.5" min="0.3" max="10" step="0.1">
+                        <div class="field-hint">Pausas maiores que isso entre falas serão marcadas. Recomendado: 1.0 a 2.0s</div>
+                    </div>
+                    <div class="field">
+                        <label for="silence-padding">Margem de segurança (segundos)</label>
+                        <input type="number" id="silence-padding" value="0.3" min="0" max="2" step="0.1">
+                        <div class="field-hint">Evita cortar respirações ou início/fim de palavra</div>
+                    </div>
+                </div>
+
+                <button id="btn-analyze-silence" class="btn-primary" disabled>
+                    <span>🔍 Analisar silêncios</span>
+                </button>
+
+                <div id="silence-results" class="silence-results hidden">
+                    <h3>Silêncios encontrados</h3>
+                    <div id="silence-list" class="silence-list"></div>
+                    <button id="btn-apply-silence" class="btn-primary">Aplicar cortes e marcar em vermelho</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ MANUAL VIEW ============ -->
+        <section id="view-manual" class="view">
+            <header class="view-header">
+                <button class="icon-btn" id="btn-back-manual">←</button>
+                <h2>Manual de uso</h2>
+            </header>
+
+            <div class="manual-body">
+                <div class="manual-step">
+                    <div class="manual-num">1</div>
+                    <div class="manual-content">
+                        <h3>Configure as APIs (1x só)</h3>
+                        <p>Clique no ⚙ no topo da extensão. Na aba <strong>Providers</strong>, cole as keys necessárias:</p>
+                        <ul>
+                            <li><strong>OpenAI</strong> (obrigatório para transcrição Whisper): platform.openai.com/api-keys</li>
+                            <li><strong>Claude</strong> (recomendado para análise): console.anthropic.com/settings/keys</li>
+                            <li><strong>Gemini</strong> (mais barato): aistudio.google.com/app/apikey</li>
+                        </ul>
+                        <p>Clique em <strong>Testar conexão</strong>, depois <strong>Salvar chaves</strong>.</p>
+                        <div class="manual-tip">
+                            💡 OpenAI é usada para transcrever o áudio (Whisper). Você ainda pode escolher qualquer provider (Claude/OpenAI/Gemini) para a análise dos cortes.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="manual-step">
+                    <div class="manual-num">2</div>
+                    <div class="manual-content">
+                        <h3>(Opcional) Instale FFmpeg</h3>
+                        <p>Vídeos maiores que 24MB precisam de FFmpeg para extrair o áudio. Também é recomendado para vídeos menores — reduz custo e tempo de transcrição em até 4x.</p>
+                        <ul>
+                            <li><strong>macOS:</strong> <code>brew install ffmpeg</code></li>
+                            <li><strong>Linux:</strong> <code>sudo apt install ffmpeg</code></li>
+                            <li><strong>Windows:</strong> baixe em <a>ffmpeg.org</a> e adicione ao PATH</li>
+                        </ul>
+                        <div class="manual-tip">
+                            Sem FFmpeg instalado? Ainda funciona para vídeos &lt; 24MB (o arquivo é enviado direto).
+                        </div>
+                    </div>
+                </div>
+
+                <div class="manual-step">
+                    <div class="manual-num">3</div>
+                    <div class="manual-content">
+                        <h3>Arraste o vídeo e analise</h3>
+                        <ol>
+                            <li><strong>Passo 1:</strong> Arraste o arquivo de vídeo na área grande (ou clique para abrir o seletor do sistema). A extensão reconhece .mp4, .mov, .mkv, .webm, etc.</li>
+                            <li><strong>Passo 2:</strong> Escreva um briefing claro (o que você quer extrair desse vídeo).</li>
+                            <li><strong>Passo 3:</strong> Mantenha a fonte de transcrição em <strong>Transcrever com IA</strong> (padrão recomendado). A alternativa manual está no mesmo bloco, só se você já tem o TXT/SRT.</li>
+                            <li><strong>Passo 4:</strong> Escolha o <strong>modo</strong>:
+                                <ul>
+                                    <li><strong>Extrair falas inteiras</strong>: um trecho contínuo por corte. Ideal para palestra, aula, podcast.</li>
+                                    <li><strong>Criar vídeos com cortes</strong>: monta vídeos costurando falas de momentos diferentes (hook + body + payoff).</li>
+                                </ul>
+                            </li>
+                            <li>Clique <strong>Analisar vídeo</strong>. A extensão transcreve o áudio com Whisper, gera candidatos, envia para IA e lista as sugestões.</li>
+                        </ol>
+                        <div class="manual-tip">
+                            📁 A transcrição fica em cache local (por hash do arquivo). Se você refizer a análise com outro briefing, não transcreve de novo.<br>
+                            🔄 Botão <strong>Reprocessar transcrição</strong> força uma nova chamada ao Whisper (ignorando o cache).
+                        </div>
+                    </div>
+                </div>
+
+                <div class="manual-step">
+                    <div class="manual-num">4</div>
+                    <div class="manual-content">
+                        <h3>Revise, refine e insira</h3>
+                        <ol>
+                            <li>Cada card traz score, duração, headline, hook, caption e texto completo.</li>
+                            <li>Use os botões por card para iterar sem refazer tudo:
+                                <ul>
+                                    <li><strong>✨ Melhorar</strong>: pede uma versão melhor do mesmo trecho.</li>
+                                    <li><strong>🎣 Novo gancho</strong>: troca só a abertura (hook).</li>
+                                    <li><strong>🔀 Variação</strong>: uma ideia parecida em outro momento.</li>
+                                    <li><strong>🗑 Descartar</strong>: remove o card.</li>
+                                </ul>
+                            </li>
+                            <li>Marque os checkboxes dos que quer usar e clique <strong>Adicionar à timeline</strong>. Se o vídeo ainda não está no Project, a extensão importa automaticamente.</li>
+                        </ol>
+                        <div class="manual-tip">
+                            ✨ <strong>Regra da timeline:</strong>
+                            • <strong>Extrair falas:</strong> cada fala vira um vídeo separado com cor própria, gap de 30s.<br>
+                            • <strong>Criar vídeos com cortes:</strong> cada vídeo é um grupo de cortes com a mesma cor; grupos diferentes = cores diferentes; gap de 30s entre grupos.<br>
+                            • Cortes são inseridos apenas uma vez (dedup no cliente E no host).
+                        </div>
+                    </div>
+                </div>
+
+                <div class="manual-step">
+                    <div class="manual-num">5</div>
+                    <div class="manual-content">
+                        <h3>Salve seus briefings favoritos</h3>
+                        <p>Depois de escrever um bom briefing, clique em <strong>💾 Salvar</strong> e dê um nome (ex: "Pegada emocional"). Da próxima vez, use <strong>📂 Carregar</strong>.</p>
+                        <p>Três templates já vêm prontos: Pegada emocional · Financeiro/Empresarial · Reels educacionais.</p>
+                    </div>
+                </div>
+
+                <div class="manual-troubleshooting">
+                    <h3>⚠ Problemas comuns</h3>
+                    <div class="trouble-item">
+                        <strong>"Drag-drop não forneceu caminho local":</strong>
+                        <span>Clique no dropzone em vez de arrastar — abre o seletor nativo do CEP que sempre retorna o path.</span>
+                    </div>
+                    <div class="trouble-item">
+                        <strong>"FFmpeg não encontrado" (vídeo &gt;= 24MB):</strong>
+                        <span>Instale com <code>brew install ffmpeg</code> (Mac) ou use a opção avançada "Importar transcrição manual".</span>
+                    </div>
+                    <div class="trouble-item">
+                        <strong>"Sem sequência ativa":</strong>
+                        <span>Marque "Criar nova sequência" antes de inserir na timeline.</span>
+                    </div>
+                    <div class="trouble-item">
+                        <strong>"API error" durante análise:</strong>
+                        <span>Teste a conexão nas Settings. Verifique crédito no provider.</span>
+                    </div>
+                    <div class="trouble-item">
+                        <strong>Cortes cortam no meio da frase:</strong>
+                        <span>A IA recebe candidatos pré-validados — raramente acontece. Se acontecer, use "Melhorar este corte" no card.</span>
+                    </div>
+                </div>
+
+                <div class="manual-footer">
+                    <p>FASTVIDEO v1.10 · Fluxo: vídeo → Whisper → candidatos → IA escolhe → timeline</p>
+                    <p>📖 Documentação completa: README.md no repositório</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ SETTINGS VIEW ============ -->
+        <section id="view-settings" class="view">
+            <header class="view-header">
+                <button class="icon-btn" id="btn-back-settings">←</button>
+                <h2>Configurações</h2>
+            </header>
+
+            <div class="settings-body">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="providers">Providers</button>
+                    <button class="tab-btn" data-tab="templates">Templates</button>
+                    <button class="tab-btn" data-tab="prompt">Prompt IA</button>
+                    <button class="tab-btn" data-tab="about">Sobre</button>
+                </div>
+
+                <div class="tab-content active" data-tab="providers">
+                    <div class="provider-card">
+                        <div class="provider-head">
+                            <strong>Claude (Anthropic)</strong>
+                            <span class="badge">Recomendado</span>
+                        </div>
+                        <input type="password" id="key-anthropic" placeholder="sk-ant-...">
+                        <select id="model-anthropic">
+                            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (rápido/barato)</option>
+                            <option value="claude-sonnet-4-6" selected>Sonnet 4.6 (equilibrado)</option>
+                            <option value="claude-opus-4-7">Opus 4.7 (máxima qualidade)</option>
+                        </select>
+                        <button class="btn-secondary" data-test="anthropic">Testar conexão</button>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-head"><strong>OpenAI</strong></div>
+                        <input type="password" id="key-openai" placeholder="sk-...">
+                        <select id="model-openai">
+                            <option value="gpt-4o-mini" selected>GPT-4o mini</option>
+                            <option value="gpt-4o">GPT-4o</option>
+                            <option value="gpt-5">GPT-5</option>
+                        </select>
+                        <button class="btn-secondary" data-test="openai">Testar conexão</button>
+                    </div>
+
+                    <div class="provider-card">
+                        <div class="provider-head"><strong>Google Gemini</strong></div>
+                        <input type="password" id="key-gemini" placeholder="AIza...">
+                        <select id="model-gemini">
+                            <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        </select>
+                        <button class="btn-secondary" data-test="gemini">Testar conexão</button>
+                    </div>
+
+                    <button class="btn-primary" id="btn-save-providers">Salvar chaves</button>
+                    <p class="note">🔒 Chaves armazenadas localmente e criptografadas. Nunca enviadas para servidores externos além do próprio provider escolhido.</p>
+                </div>
+
+                <div class="tab-content" data-tab="templates">
+                    <p class="note">Templates salvos de briefing para reuso rápido.</p>
+                    <div id="templates-list" class="templates-list"></div>
+                    <div class="template-editor">
+                        <input type="text" id="tpl-name" placeholder="Nome do template (ex: Pegada emocional)">
+                        <textarea id="tpl-content" rows="4" placeholder="Briefing do template..."></textarea>
+                        <button class="btn-primary" id="btn-create-template">Criar template</button>
+                    </div>
+                </div>
+
+                <!-- Tab Prompt IA -->
+                <div class="tab-content" data-tab="prompt">
+                    <p class="note">
+                        <strong>System prompt</strong> enviado para a IA em TODAS as extrações, junto com o briefing específico de cada vídeo. Editar aqui afeta a qualidade global dos cortes. <em>Edite apenas se souber o que está fazendo.</em>
+                    </p>
+                    <textarea id="system-prompt" rows="18" style="font-family: Monaco, Consolas, monospace; font-size: 11px;"></textarea>
+                    <div class="row-actions">
+                        <button class="btn-primary" id="btn-save-prompt" style="flex:1">💾 Salvar prompt</button>
+                        <button class="btn-secondary" id="btn-reset-prompt" style="flex:1">↺ Restaurar padrão</button>
+                    </div>
+                    <p class="note" style="margin-top: 4px;">
+                        Dica: experimente adicionar regras específicas do seu nicho. Ex: "Evite citações técnicas", "Priorize frases com números", "Prefira hooks em forma de pergunta".
+                    </p>
+                </div>
+
+                <div class="tab-content" data-tab="about">
+                    <div class="about">
+                        <h3>FASTVIDEO</h3>
+                        <p>Extensão para Adobe Premiere Pro que extrai os melhores trechos de vídeos usando IA.</p>
+                        <ul>
+                            <li><strong>Transcrição:</strong> automática via OpenAI Whisper (ou manual como fallback)</li>
+                            <li><strong>Providers análise:</strong> Claude, OpenAI, Gemini</li>
+                            <li><strong>Modos:</strong> extrair falas inteiras ou criar vídeos com cortes</li>
+                            <li><strong>Cache:</strong> transcrição salva em ~/.fastvideo-cache por hash do arquivo</li>
+                            <li><strong>Timeline:</strong> subclipes não-destrutivos, sem duplicação</li>
+                        </ul>
+                        <p class="muted">v1.10 — Segunda-feira Framework</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ MODAL: LOAD TEMPLATE ============ -->
+        <div id="modal-load" class="modal hidden">
+            <div class="modal-body">
+                <h3>Carregar template</h3>
+                <div id="modal-templates-list" class="templates-list"></div>
+                <button class="btn-secondary" id="btn-close-modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/CSInterface.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/transcript-parser.js"></script>
+    <script src="js/video-loader.js"></script>
+    <script src="js/audio-transcriber.js"></script>
+    <script src="js/engines.js"></script>
+    <script src="js/providers.js"></script>
+    <script src="js/templates.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
