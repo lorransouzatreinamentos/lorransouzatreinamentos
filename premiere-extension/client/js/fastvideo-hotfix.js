@@ -2,6 +2,25 @@
 (function () {
   'use strict';
   function byId(id) { return document.getElementById(id); }
+  function injectStyles() {
+    if (document.getElementById('fastvideo-hotfix-style')) return;
+    var style = document.createElement('style');
+    style.id = 'fastvideo-hotfix-style';
+    style.textContent = [
+      '.hotfix-hidden-advanced{display:none!important}',
+      '.video-source-actions{display:flex;gap:8px;margin-top:12px;justify-content:center;flex-wrap:wrap}',
+      '.video-source-btn{width:auto!important;min-width:138px;padding:8px 12px!important}',
+      '#dropzone-video{min-height:150px}',
+      '#dropzone-video .dropzone-hint{max-width:360px;margin:0 auto;line-height:1.4}',
+      '#prompt{min-height:96px!important;line-height:1.55!important;user-select:text!important;-webkit-user-select:text!important;cursor:text!important}',
+      'textarea,input{user-select:text!important;-webkit-user-select:text!important}',
+      '.progress{position:sticky;bottom:8px;z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.35)}',
+      '.progress-label{font-weight:600;color:var(--text)!important}',
+      '#btn-start.is-working{opacity:.85;pointer-events:none}',
+      '.dropzone-video.hotfix-ready{border-style:solid}'
+    ].join('\n');
+    document.head.appendChild(style);
+  }
   function setProgress(label, pct) {
     var box = byId('progress');
     var fill = byId('progress-fill');
@@ -53,6 +72,7 @@
     var dz = byId('dropzone-video');
     if (!dz || dz.dataset.hotfixUnified === '1') return;
     dz.dataset.hotfixUnified = '1';
+    dz.classList.add('hotfix-ready');
     var title = dz.querySelector('.dropzone-title');
     var hint = dz.querySelector('.dropzone-hint');
     if (title) title.textContent = 'Arraste um vídeo aqui';
@@ -81,6 +101,7 @@
       start.dataset.hotfixProgress = '1';
       start.addEventListener('click', function () {
         if (start.disabled) return;
+        start.classList.add('is-working');
         setProgress('Preparando análise...', 3);
         var pct = 6;
         clearInterval(window.__fvProgressTimer);
@@ -88,6 +109,7 @@
           var results = byId('results');
           if (results && !results.classList.contains('hidden') && results.querySelector('.result-card')) {
             clearInterval(window.__fvProgressTimer);
+            start.classList.remove('is-working');
             finishProgress();
             return;
           }
@@ -110,6 +132,8 @@
       var observer = new MutationObserver(function () {
         if (!resultsBox.classList.contains('hidden') && resultsBox.querySelector('.result-card')) {
           clearInterval(window.__fvProgressTimer);
+          var start = byId('btn-start');
+          if (start) start.classList.remove('is-working');
           finishProgress();
         }
       });
@@ -117,6 +141,7 @@
     }
   }
   function init() {
+    injectStyles();
     improvePrompt();
     simplifyVideoBox();
     improveProgress();
