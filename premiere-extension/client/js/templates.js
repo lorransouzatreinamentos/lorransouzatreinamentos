@@ -42,4 +42,20 @@
     };
 
     window.Templates = Templates;
+
+    // Hotfix v1.10.2: carrega ajustes de usabilidade sem depender de editar index.html.
+    try {
+        if (!window.__FASTVIDEO_HOTFIX_LOADED__) {
+            window.__FASTVIDEO_HOTFIX_LOADED__ = true;
+            const script = document.createElement('script');
+            script.src = 'js/fastvideo-hotfix.js';
+            script.defer = true;
+            script.onerror = function() {
+                console.warn('[FASTVIDEO] hotfix não carregou');
+            };
+            document.head.appendChild(script);
+        }
+    } catch (e) {
+        console.warn('[FASTVIDEO] falha ao injetar hotfix:', e);
+    }
 })();
