@@ -16,7 +16,7 @@ const c = {
   reset: '\x1b[0m',
 };
 
-const VERSION = '6.3.0';
+const VERSION = '7.0.0';
 const CLAUDE_DIR = path.join(os.homedir(), '.claude');
 
 function info(msg) { console.log(`  ${c.cyan}${c.bold}INFO${c.reset}  ${msg}`); }
@@ -33,7 +33,7 @@ ${c.bold}  ____                            _              __      _
   ___) |  __/ (_| | |_| | | | | (_| | (_| |_____|  _|  __/ | | | (_| |
  |____/ \\___|\\__, |\\__,_|_| |_|\\__,_|\\__,_|     |_|  \\___|_|_|  \\__,_|
              |___/                                                      ${c.reset}
-  ${c.dim}v${VERSION} — 49+ agentes de IA. 68 skills. 15 rules. O terror do CLT.${c.reset}
+  ${c.dim}v${VERSION} — 52+ agentes de IA. 74 skills. 16 rules. O terror do CLT.${c.reset}
 `);
 }
 

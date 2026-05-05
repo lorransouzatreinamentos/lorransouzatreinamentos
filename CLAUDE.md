@@ -214,6 +214,8 @@ Beyond core development agents, these specialists handle domain-specific work:
 | /flutter-app | Desenvolvimento de app Flutter com IA |
 | /gohighlevel-convert | Migração e configuração GoHighLevel |
 | /eduzz-products | Gestão de produtos e checkouts Eduzz |
+| /carousel-3d | Carrosséis 3D rotativos (drag, scroll, auto-rotação) — React + CSS 3D |
+| /empire-landing | Landing premium estilo Empire Metaverse — tipografia oversized, parallax, glow |
 
 ## Nervous System (Sistema Nervoso dos Agentes)
 
@@ -245,6 +247,6 @@ Beyond core development agents, these specialists handle domain-specific work:
 | AntiGravity Framework | `~/telegram-scraper/output/INEMA_Google/media/` | B.L.A.S.T., skills, design system |
 
 ---
-*Segunda-feira — Constituição v7.0 | 27 agentes de IA (4 core + 23 specialist). 72 skills. 16 rules. Consciousness Engine v1.0. Feedback loop v2.0. 30 mailboxes. Handoff. INEMA Knowledge Base. O terror do CLT.*
+*Segunda-feira — Constituição v7.0 | 27 agentes de IA (4 core + 23 specialist). 74 skills. 16 rules. Consciousness Engine v1.0. Feedback loop v2.0. 30 mailboxes. Handoff. INEMA Knowledge Base. O terror do CLT.*
 
 > **Nota de contagem:** Os 27 acima são os specialist agents em `~/.claude/agents/`. O framework completo inclui também os 9 SDC agents (@sf-master, @pm, @po, @sm, @architect, @qa, @devops, @data-engineer, @ux-design-expert) e ~16 business agents no MY GROWTH (Nexo, Orion, Nova, Nico, Primo, Apex, Max, Care, Pulse, Ori, Kai, Eve, Eros, Craft, Dara, Uma) — **52+ agentes totais no ecossistema Segunda-feira.**
