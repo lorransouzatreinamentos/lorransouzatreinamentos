@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3, "name": "ESTUDIO LS", "version": "0.2.1",
+  "description": "Estúdio independente para organizar e acompanhar transmissões ao vivo.",
+  "permissions": ["storage", "sidePanel", "alarms", "activeTab"],
+  "host_permissions": ["https://*.tiktok.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "side_panel": {"default_path": "panel.html"},
+  "action": {"default_title": "Abrir ESTUDIO LS"},
+  "content_scripts": [
+    {"matches": ["https://*.tiktok.com/*"], "js": ["camera-page.js"], "world": "MAIN", "run_at": "document_start"},
+    {"matches": ["https://*.tiktok.com/*"], "js": ["camera-bridge.js"], "run_at": "document_start"},
+    {"matches": ["https://*.tiktok.com/*"], "js": ["adapter.js"], "run_at": "document_idle"}
+  ],
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'self'"}
+}

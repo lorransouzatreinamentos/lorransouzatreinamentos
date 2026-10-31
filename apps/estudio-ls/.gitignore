@@ -1,0 +1,7 @@
+node_modules/
+.env
+.env.*
+.setup-invitation
+server/data/
+__pycache__/
+*.log

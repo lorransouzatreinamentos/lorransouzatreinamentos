@@ -1,0 +1,7 @@
+.env
+.env.*
+.setup-invitation
+server/data
+node_modules
+dist
+.git

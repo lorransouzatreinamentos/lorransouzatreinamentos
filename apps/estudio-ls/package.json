@@ -1,0 +1,6 @@
+{
+  "name": "estudio-ls", "version": "0.2.1", "private": true, "type": "module",
+  "description": "Reconstrução do ESTUDIO LS a partir do código registrado na conversa",
+  "engines": {"node": ">=24"},
+  "scripts": {"test": "node scripts/test.mjs", "check": "node scripts/check.mjs", "package": "python3 scripts/package.py", "server": "node server/start.js"}
+}

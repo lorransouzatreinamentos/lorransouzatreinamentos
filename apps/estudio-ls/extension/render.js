@@ -1,0 +1,11 @@
+import {clock,timerRemaining}from'./core.js';
+function lines(ctx,text,width,max=3){const result=[];let line='';for(const word of String(text).split(/\s+/)){const next=line?line+' '+word:word;if(line&&ctx.measureText(next).width>width){result.push(line);line=word;}else line=next;}if(line)result.push(line);return result.slice(0,max);}
+function fit(ctx,source,x,y,w,h,mode='cover',mirror=false,zoom=1){const sw=source?.videoWidth||source?.naturalWidth,sh=source?.videoHeight||source?.naturalHeight;if(!sw||!sh)return;const scale=(mode==='contain'?Math.min:Math.max)(w/sw,h/sh)*zoom;ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();if(mirror){ctx.translate(2*x+w,0);ctx.scale(-1,1);}ctx.drawImage(source,x+(w-sw*scale)/2,y+(h-sh*scale)/2,sw*scale,sh*scale);ctx.restore();}
+export function drawScene(ctx,{scene,timer,media=null,camera=null,layerMedia=new Map(),now=Date.now()}){
+  const {width:w,height:h}=ctx.canvas;ctx.save();ctx.fillStyle=scene.background;ctx.fillRect(0,0,w,h);fit(ctx,media,0,0,w,h,'cover',scene.mirror,scene.zoom||1);
+  const g=ctx.createLinearGradient(0,h*.4,0,h);g.addColorStop(0,'#00000000');g.addColorStop(1,'#000000dd');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);
+  ctx.fillStyle=scene.accent;ctx.fillRect(w*.07,h*.71,w*.12,h*.006);ctx.textBaseline='top';ctx.font=`700 ${w*.075}px system-ui`;ctx.fillStyle='#ffffff';lines(ctx,scene.title,w*.86,2).forEach((line,i)=>ctx.fillText(line,w*.07,h*.74+i*w*.09,w*.86));ctx.font=`${w*.034}px system-ui`;ctx.fillStyle='#dbe3dc';lines(ctx,scene.subtitle,w*.86,2).forEach((line,i)=>ctx.fillText(line,w*.07,h*.87+i*w*.05,w*.86));
+  if(timer?.status==='running'){ctx.fillStyle='#0c1512dd';ctx.fillRect(w*.61,h*.04,w*.32,h*.045);ctx.font=`600 ${w*.04}px monospace`;ctx.fillStyle=scene.accent;ctx.fillText(clock(timerRemaining(timer,now)),w*.65,h*.05);}
+  fit(ctx,camera,w*.56,h*.12,w*.4,h*.2,'contain');
+  for(const l of scene.layers??[]){if(!l.visible)continue;ctx.save();ctx.globalAlpha=l.opacity??1;ctx.fillStyle=l.color;const x=w*l.x/100,y=h*l.y/100,lw=w*l.width/100,lh=h*l.height/100;if(l.type==='rectangle')ctx.fillRect(x,y,lw,lh);else if(l.type==='media')fit(ctx,layerMedia.get(l.id),x,y,lw,lh,l.fit,l.mirror);else{ctx.font=`700 ${l.size}px system-ui`;lines(ctx,l.text,lw,6).forEach((line,i)=>ctx.fillText(line,x,y+i*l.size*1.2,lw));}ctx.restore();}ctx.restore();
+}

@@ -1,0 +1,1 @@
+import{readdir}from'node:fs/promises';import{spawnSync}from'node:child_process';for(const f of(await readdir('tests')).filter(f=>f.endsWith('.test.js')).sort()){const r=spawnSync(process.execPath,['tests/'+f],{stdio:'inherit'});if(r.status!==0)process.exit(r.status??1);}
